@@ -1,0 +1,77 @@
+[
+  {
+    "name": "Aníbal",
+    "sheets": [{ "file": "Anibal.png", "title": "Aníbal" }],
+    "description": "Sheet de planta con EPP completo: casco blanco, orejeras amarillas, guantes tipo A y detector de gases.",
+    "visual_notes": "Late-50s man, short and heavyset with a round belly, warm tan skin with light freckles and age spots, round friendly face, short salt-and-pepper hair, brown eyes, gentle closed-mouth smile. Kit: white vented hard hat with yellow clip-on earmuffs, clear wraparound safety glasses, Type A yellow-gold leather impact gloves with orange knuckle pads and grey cuff panel, orange personal gas detector clipped on the chest."
+  },
+  {
+    "name": "Beatriz",
+    "sheets": [{ "file": "Beatriz.png", "title": "Beatriz" }],
+    "description": "Sheet de planta con EPP completo: casco blanco, orejeras negras, guantes tipo B (puño rojo) y detector de gases.",
+    "visual_notes": "Early-60s woman, short and stocky, warm brown skin, short grey hair, round face with smile lines, brown eyes, kind closed-mouth smile. Kit: white vented hard hat with black clip-on earmuffs, clear wraparound safety glasses, Type B long gauntlet gloves with red cuffs and black dipped grip, orange personal gas detector clipped on the chest."
+  },
+  {
+    "name": "Fernanda",
+    "sheets": [{ "file": "Fernanda.png", "title": "Fernanda" }],
+    "description": "Sheet en modo oficina (sin casco ni guantes).",
+    "visual_notes": "Mid-30s woman, medium build with a full figure, light tan skin, brown eyes, auburn-brown hair pulled back into a low ponytail, calm soft smile. Sheet shows office mode: no helmet and no gloves, white name patch above the Clear chest patch."
+  },
+  {
+    "name": "Gabriela",
+    "sheets": [{ "file": "Gabriela.png", "title": "Gabriela" }],
+    "description": "Sheet de planta con EPP completo: casco blanco, orejeras amarillas, guantes tipo A y detector de gases.",
+    "visual_notes": "Late-20s to early-30s woman, slim, tan skin, brown eyes, thick dark eyebrows, black hair in a low bun with a few loose strands, calm confident look. Kit: white vented hard hat with yellow clip-on earmuffs, clear wraparound safety glasses, Type A yellow-gold leather impact gloves with orange pads and grey cuff panel, orange personal gas detector clipped on the chest."
+  },
+  {
+    "name": "Gustavo",
+    "sheets": [{ "file": "Gustavo.png", "title": "Gustavo" }],
+    "description": "Sheet en modo oficina (sin casco ni guantes).",
+    "visual_notes": "About 60, heavyset man with a round belly, fair skin with rosy cheeks, grey hair combed back, thick grey-black moustache, brown eyes, warm friendly smile. Sheet shows office mode: no helmet and no gloves, white tee under the collar."
+  },
+  {
+    "name": "José",
+    "sheets": [{ "file": "Jose.png", "title": "José" }],
+    "description": "Sheet de planta con EPP completo: casco blanco, orejeras amarillas bajas y guantes tipo A.",
+    "visual_notes": "Early-40s man, medium build, tan skin, short black hair, brown eyes, serious calm expression. Kit: white vented hard hat with yellow clip-on earmuffs lowered over the ears, clear wraparound safety glasses, Type A yellow-gold leather impact gloves with orange pads and grey cuff panel."
+  },
+  {
+    "name": "Norma",
+    "sheets": [{ "file": "Norma.png", "title": "Norma" }],
+    "description": "Sheet de planta con EPP completo: casco blanco, tapones auditivos, anteojos oscuros, guantes largos negros y detector de gases.",
+    "visual_notes": "Mid-40s woman, stocky, brown skin, dark eyes, black hair in a low ponytail, serious focused expression. Kit: white vented hard hat, green foam earplugs with a blue cord, smoked grey wraparound safety glasses, long black gauntlet gloves with bright yellow-green impact pads on the back of the hand and fingers, orange personal gas detector clipped on the chest."
+  },
+  {
+    "name": "Sergio",
+    "sheets": [{ "file": "Sergio.png", "title": "Sergio" }],
+    "description": "Sheet sin casco ni guantes, con detector de gases.",
+    "visual_notes": "Mid-40s man, medium-sturdy build, fair skin, dark brown hair combed back, heavy dark eyebrows, light stubble, serious calm gaze. Sheet shows no helmet and no gloves, red trim at the sleeve cuffs, orange personal gas detector clipped on the chest."
+  },
+  {
+    "name": "Silvana",
+    "sheets": [{ "file": "Silvana.png", "title": "Silvana" }],
+    "description": "Sheet sin casco ni guantes, con detector de gases.",
+    "visual_notes": "Mid-40s woman, slim, light tan skin, dark brown eyes, dark brown hair pulled back into a low bun with a center part, gentle closed-mouth smile. Sheet shows no helmet and no gloves, orange personal gas detector clipped on the chest."
+  },
+  {
+    "name": "Soledad",
+    "sheets": [
+      { "file": "Soledad_Oficina.png", "title": "Soledad (oficina)" },
+      { "file": "Soledad_Planta.png", "title": "Soledad (planta)" }
+    ],
+    "description": "Dos sheets: modo oficina (pelo suelto, reloj inteligente) y modo planta (casco blanco, orejeras amarillas, guantes tipo A).",
+    "visual_notes": "Mid-30s woman, slim, fair skin, brown eyes, light brown straight hair (shoulder length and loose in the office, in a ponytail in the field), big warm open smile. Office look: no helmet, smartwatch on the left wrist and a thin silver bracelet. Field kit: white vented hard hat with yellow clip-on earmuffs, clear wraparound safety glasses, Type A yellow-gold leather impact gloves with orange pads."
+  },
+  {
+    "name": "Tomás",
+    "sheets": [{ "file": "Tomas.png", "title": "Tomás" }],
+    "description": "Sheet de planta con EPP completo: casco azul, orejeras amarillas, guantes tipo C y detector de gases.",
+    "visual_notes": "Early-30s man, slim and tall, tan skin with light freckles, very short dark hair, brown eyes, prominent ears, friendly half-smile. Kit: blue vented hard hat with yellow clip-on earmuffs, clear wraparound safety glasses, Type C yellow gloves with bright yellow-green impact pads, orange personal gas detector clipped on the chest."
+  },
+  {
+    "name": "Yamila",
+    "sheets": [{ "file": "Yamila.png", "title": "Yamila" }],
+    "description": "Sheet sin casco ni guantes, con detector de gases.",
+    "visual_notes": "Late-20s woman, short and curvy, brown skin, large dark-brown eyes, thick eyebrows, curly black hair gathered in a low bun, big bright smile. Sheet shows no helmet and no gloves, orange personal gas detector clipped on the chest."
+  }
+]
