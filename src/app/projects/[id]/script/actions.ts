@@ -3,18 +3,26 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runAction, throwIfError, type ActionResult } from "@/lib/action-result";
+import { scriptFileKind, unsupportedScriptMessage } from "@/lib/ingest/kinds";
 import { enqueueJob, hasActiveJob } from "@/lib/jobs/queue";
-import { advanceProjectStatus } from "@/lib/pipeline/context";
+import { advanceProjectStatus, insertScriptVersion } from "@/lib/pipeline/context";
 import { scriptParamsSchema, type ScriptParams } from "@/lib/pipeline/script";
+import { uniquePath } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 
 const uuid = z.uuid();
+type Db = Awaited<ReturnType<typeof createClient>>;
+
+/** Un solo proceso de guion a la vez por proyecto: generar, importar o adaptar. */
+async function assertNoScriptJob(db: Db, projectId: string) {
+  for (const type of ["generate_script", "import_script", "adapt_script"] as const) {
+    if (await hasActiveJob(db, projectId, type)) throw new Error("Ya hay un guion procesándose para este proyecto.");
+  }
+}
 
 async function assertCanGenerate(projectId: string) {
   const db = await createClient();
-  if (await hasActiveJob(db, projectId, "generate_script")) {
-    throw new Error("Ya hay un guion generándose para este proyecto.");
-  }
+  await assertNoScriptJob(db, projectId);
   const { count } = await db
     .from("sources")
     .select("id", { count: "exact", head: true })
@@ -75,25 +83,77 @@ export async function saveScriptVersion(input: {
       .object({ projectId: uuid, baseVersion: z.number().int().positive(), content: z.string().trim().min(1, "El guion está vacío") })
       .parse(input);
     const db = await createClient();
-    const { data: last } = await db
-      .from("scripts")
-      .select("version")
-      .eq("project_id", data.projectId)
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const version = (last?.version ?? 0) + 1;
-    throwIfError(
-      await db.from("scripts").insert({
-        project_id: data.projectId,
-        version,
-        content: data.content,
-        generation_params: { manual: true, baseVersion: data.baseVersion },
-      }),
-      "No se pudo guardar la versión",
-    );
+    const version = await insertScriptVersion(db, data.projectId, data.content, { manual: true, baseVersion: data.baseVersion });
     revalidatePath(`/projects/${data.projectId}`, "layout");
     return version;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Guion que ya existe: subirlo (archivo o texto pegado) y, si hace falta, adaptarlo al formato de la app
+// ---------------------------------------------------------------------------
+
+export async function createScriptUploadTarget(input: {
+  projectId: string;
+  fileName: string;
+}): Promise<ActionResult<{ path: string; token: string }>> {
+  return runAction(async () => {
+    const data = z.object({ projectId: uuid, fileName: z.string().min(1) }).parse(input);
+    if (!scriptFileKind("", data.fileName)) throw new Error(unsupportedScriptMessage(data.fileName));
+    const db = await createClient();
+    const path = uniquePath(`${data.projectId}/scripts/uploads`, data.fileName);
+    const { data: signed, error } = await db.storage.from("projects").createSignedUploadUrl(path);
+    throwIfError({ error }, "No se pudo preparar la subida");
+    return { path, token: signed!.token };
+  });
+}
+
+/** Registra un guion ya subido a Storage y encola su lectura (se guarda tal cual como versión nueva). */
+export async function importScriptFile(input: {
+  projectId: string;
+  fileName: string;
+  path: string;
+  mimeType: string;
+}): Promise<ActionResult> {
+  return runAction(async () => {
+    const data = z
+      .object({ projectId: uuid, fileName: z.string().min(1), path: z.string().min(1), mimeType: z.string() })
+      .parse(input);
+    if (!data.path.startsWith(`${data.projectId}/scripts/uploads/`)) throw new Error("Ruta de archivo inválida");
+    if (!scriptFileKind(data.mimeType, data.fileName)) throw new Error(unsupportedScriptMessage(data.fileName));
+    const db = await createClient();
+    await assertNoScriptJob(db, data.projectId);
+    await enqueueJob(db, {
+      projectId: data.projectId,
+      type: "import_script",
+      payload: { path: data.path, fileName: data.fileName, mimeType: data.mimeType },
+    });
+    revalidatePath(`/projects/${data.projectId}`, "layout");
+    return null;
+  });
+}
+
+/** Guion pegado: se guarda tal cual como versión nueva, sin pasar por la cola. */
+export async function importScriptText(input: { projectId: string; content: string }): Promise<ActionResult<number>> {
+  return runAction(async () => {
+    const data = z.object({ projectId: uuid, content: z.string().trim().min(1, "Pegá el guion") }).parse(input);
+    const db = await createClient();
+    const version = await insertScriptVersion(db, data.projectId, data.content, { imported: true });
+    await advanceProjectStatus(db, data.projectId, "script");
+    revalidatePath(`/projects/${data.projectId}`, "layout");
+    return version;
+  });
+}
+
+/** El motor de texto pasa una versión al formato de escenas y tomas de la app, en una versión nueva. */
+export async function adaptScript(input: { projectId: string; baseVersion: number }): Promise<ActionResult> {
+  return runAction(async () => {
+    const data = z.object({ projectId: uuid, baseVersion: z.number().int().positive() }).parse(input);
+    const db = await createClient();
+    await assertNoScriptJob(db, data.projectId);
+    await enqueueJob(db, { projectId: data.projectId, type: "adapt_script", payload: { baseVersion: data.baseVersion } });
+    revalidatePath(`/projects/${data.projectId}`, "layout");
+    return null;
   });
 }
 

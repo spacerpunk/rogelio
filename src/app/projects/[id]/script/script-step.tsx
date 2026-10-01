@@ -37,6 +37,7 @@ import {
   EXPERIENCE_LEVELS,
   INCLUDE_OPTIONS,
   TONES,
+  scriptOrigin,
   scriptStats,
   targetShotCount,
   type ScriptParams,
@@ -44,7 +45,10 @@ import {
 import { formatDuration } from "@/lib/projects/data";
 import { cn } from "@/lib/utils";
 import { isActive, useProjectJobs } from "../jobs-provider";
-import { approveScript, generateScript, regenerateScript, saveScriptVersion } from "./actions";
+import { adaptScript, approveScript, generateScript, regenerateScript, saveScriptVersion } from "./actions";
+import { UploadScriptDialog } from "./upload-script-dialog";
+
+const SCRIPT_JOBS = new Set(["generate_script", "import_script", "adapt_script"]);
 
 export type ScriptVersion = {
   id: string;
@@ -73,7 +77,7 @@ export function ScriptStep({
   shotListVersion: number | null;
 }) {
   const { jobs, refresh } = useProjectJobs();
-  const generating = jobs.find((j) => j.type === "generate_script" && isActive(j));
+  const generating = jobs.find((j) => SCRIPT_JOBS.has(j.type) && isActive(j));
   const [params, setParams] = useState(initialParams);
   const [versionNumber, setVersionNumber] = useState(versions[0]?.version ?? null);
   const current = versions.find((v) => v.version === versionNumber) ?? versions[0] ?? null;
@@ -93,6 +97,7 @@ export function ScriptStep({
         onChange={setParams}
         characters={characters}
         disabled={Boolean(generating) || !hasSources}
+        busy={Boolean(generating)}
         hasVersions={versions.length > 0}
         hasSources={hasSources}
         onQueued={refresh}
@@ -117,8 +122,8 @@ export function ScriptStep({
               <SparklesIcon className="size-8" />
               <p>Todavía no hay guion.</p>
               <p className="max-w-sm">
-                Completá los parámetros de la izquierda y generalo: Claude usa las fuentes, la style bible y el master
-                prompt del cliente.
+                Completá los parámetros de la izquierda y generalo: el motor de texto del proyecto usa las fuentes, la
+                style bible y el master prompt del cliente. Si ya tenés un guion, subilo desde el mismo panel.
               </p>
             </div>
           )
@@ -150,6 +155,7 @@ function ParamsPanel({
   onChange,
   characters,
   disabled,
+  busy,
   hasVersions,
   hasSources,
   onQueued,
@@ -159,6 +165,8 @@ function ParamsPanel({
   onChange: (p: ScriptParams) => void;
   characters: CharacterOption[];
   disabled: boolean;
+  /** Hay un proceso de guion en curso (generar, importar o adaptar). */
+  busy: boolean;
   hasVersions: boolean;
   hasSources: boolean;
   onQueued: () => void;
@@ -286,8 +294,8 @@ function ParamsPanel({
           </Field>
         </FieldGroup>
       </div>
-      <div className="border-t p-4">
-        {!hasSources && <p className="mb-2 text-xs text-amber-500">Primero cargá una fuente con texto.</p>}
+      <div className="space-y-2 border-t p-4">
+        {!hasSources && <p className="text-xs text-amber-500">Para generarlo, primero cargá una fuente con texto.</p>}
         <Button
           className="w-full"
           disabled={disabled || pending}
@@ -296,6 +304,7 @@ function ParamsPanel({
           {pending ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />}
           {hasVersions ? "Generar versión nueva desde cero" : "Generar guion"}
         </Button>
+        <UploadScriptDialog projectId={projectId} disabled={busy} onQueued={onQueued} />
       </div>
     </aside>
   );
@@ -340,7 +349,8 @@ function ScriptEditor({
               <SelectItem key={v.id} value={String(v.version)}>
                 Versión {v.version}
                 {v.approved ? " · aprobada" : ""}
-                {v.params.manual ? " · edición manual" : ""} · {new Date(v.createdAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
+                {scriptOrigin(v.params) ? ` · ${scriptOrigin(v.params)}` : ""} ·{" "}
+                {new Date(v.createdAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
               </SelectItem>
             ))}
           </SelectContent>
@@ -354,7 +364,7 @@ function ScriptEditor({
           <Badge variant="secondary">Borrador</Badge>
         )}
         <span className="text-xs text-muted-foreground tabular-nums">
-          {stats.shots} tomas · {formatDuration(stats.seconds)}
+          {stats.shots ? `${stats.shots} tomas · ${formatDuration(stats.seconds)}` : "sin tomas numeradas"}
         </span>
         <div className="ml-auto flex items-center gap-2">
           <div className="flex rounded-md border p-0.5">
@@ -411,6 +421,28 @@ function ScriptEditor({
           )}
         </div>
       </div>
+      {stats.shots === 0 && !dirty && (
+        <div className="flex flex-wrap items-center gap-3 border-b bg-sky-500/10 px-4 py-2 text-xs">
+          <span className="flex-1">
+            Este guion no sigue el formato de escenas y tomas de la app, así que su duración no se puede estimar. El
+            shot list igual lo divide en planos; adaptarlo da tomas con duración, personajes y locación de la biblioteca.
+          </span>
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={busy || pending}
+            onClick={() =>
+              run(() => adaptScript({ projectId, baseVersion: script.version }), {
+                success: "Adaptación en cola: se crea una versión nueva",
+                onSuccess: onQueued,
+              })
+            }
+          >
+            <WandSparklesIcon />
+            Adaptar al formato
+          </Button>
+        </div>
+      )}
       {script.version !== latest && !dirty && (
         <p className="border-b bg-amber-500/10 px-4 py-1.5 text-xs text-amber-500">
           Estás viendo la versión {script.version}; la última es la {latest}.
@@ -468,7 +500,9 @@ function RegenerateDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Regenerar desde la versión {baseVersion}</DialogTitle>
-          <DialogDescription>Claude reescribe el guion aplicando tus indicaciones. Se crea una versión nueva.</DialogDescription>
+          <DialogDescription>
+            El motor de texto reescribe el guion aplicando tus indicaciones. Se crea una versión nueva.
+          </DialogDescription>
         </DialogHeader>
         <Textarea
           rows={6}

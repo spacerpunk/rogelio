@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { runAction, throwIfError, type ActionResult } from "@/lib/action-result";
+import { assertEngineReady, assertImageModelReady, defaultImageEngineName } from "@/lib/engines/registry";
+import { IMAGE_SIZES } from "@/lib/engines/types";
 import { normalizedMime, sourceKind, unsupportedSourceMessage } from "@/lib/ingest/kinds";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { ASPECT_RATIOS } from "@/lib/projects/data";
@@ -86,6 +88,57 @@ export async function updateProject(input: {
         })
         .eq("id", data.projectId),
       "No se pudo guardar el proyecto",
+    );
+    revalidateProject(data.projectId);
+    return null;
+  });
+}
+
+/**
+ * Motores y ajustes de imagen del proyecto: motor de texto (PDFs, guion, shot list, prompts), motor y modelo
+ * de imagen, resolución y formato de los frames. Cambiar el motor de imagen sin modelo vuelve a su default.
+ */
+export async function setProjectEngines(input: {
+  projectId: string;
+  textEngine?: string;
+  imageEngine?: string;
+  imageModel?: string;
+  imageSize?: string;
+  aspectRatio?: string;
+}): Promise<ActionResult> {
+  return runAction(async () => {
+    const data = z
+      .object({
+        projectId: uuid,
+        textEngine: z.string().optional(),
+        imageEngine: z.string().optional(),
+        imageModel: z.string().optional(),
+        imageSize: z.enum(IMAGE_SIZES).optional(),
+        aspectRatio: z.enum(ASPECT_RATIOS).optional(),
+      })
+      .parse(input);
+    if (data.textEngine) assertEngineReady("text", data.textEngine);
+    if (data.imageEngine) assertEngineReady("image", data.imageEngine);
+    const db = await createClient();
+    // El modelo se guarda siempre junto con su motor, para que no quede asociado a otro si cambia el default.
+    let modelEngine: string | null = null;
+    if (data.imageModel) {
+      const { data: project } = await db.from("projects").select("image_engine").eq("id", data.projectId).single();
+      modelEngine = data.imageEngine ?? project?.image_engine ?? defaultImageEngineName();
+      assertImageModelReady(modelEngine, data.imageModel);
+    }
+    throwIfError(
+      await db
+        .from("projects")
+        .update({
+          ...(data.textEngine ? { text_engine: data.textEngine } : {}),
+          ...(data.imageEngine ? { image_engine: data.imageEngine, image_model: null } : {}),
+          ...(data.imageModel ? { image_engine: modelEngine, image_model: data.imageModel } : {}),
+          ...(data.imageSize ? { image_size: data.imageSize } : {}),
+          ...(data.aspectRatio ? { aspect_ratio: data.aspectRatio } : {}),
+        })
+        .eq("id", data.projectId),
+      "No se pudo cambiar el ajuste",
     );
     revalidateProject(data.projectId);
     return null;

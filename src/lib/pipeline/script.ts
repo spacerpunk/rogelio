@@ -149,6 +149,46 @@ export function buildScriptPrompt(input: ScriptPromptInput): { system: string; u
   return { system, user: parts.filter(Boolean).join("\n\n") };
 }
 
+const ADAPT_RULES = `Adaptás un guion que ya existe al formato de esta app. No escribís un guion nuevo.
+
+Reglas de la adaptación:
+- Conservá el contenido, el orden y el sentido del guion original. No agregues escenas, datos ni mensajes que no estén.
+- La locución es textual: copiala palabra por palabra. Si una línea supera las 18 palabras, repartila en tomas consecutivas sin cambiar ninguna palabra.
+- Acción visual: usá las indicaciones visuales del original; si no hay, describí brevemente lo que se ve según el contexto.
+- Personajes: si un personaje del original corresponde a uno de la lista (mismo nombre o mismo rol), usá el nombre de la lista; si no corresponde a ninguno, poné "ninguno" en la toma y anotalo en "Ficha".
+- Locación: la de la lista que mejor corresponda.
+- Segundos por toma: los que indique el original; si no indica, estimalos por la locución (unas 2,5 palabras por segundo, mínimo 3 s).
+- En "Ficha" aclará que es una adaptación de un guion existente y listá los supuestos.
+- Incluí Quiz y Cierre solo si el original los tiene.`;
+
+/** Adaptar un guion subido al formato de escenas y tomas, sin reescribir su contenido. */
+export function buildAdaptScriptPrompt(input: {
+  script: string;
+  client: string;
+  projectTitle: string;
+  aspectRatio: string;
+  characters: Named[];
+  locations: Named[];
+}): { system: string; user: string } {
+  const system = [ADAPT_RULES, FORMAT_CONTRACT].join("\n\n---\n\n");
+  const user = [
+    `<variables>\nEmpresa: ${input.client}\nProyecto: ${input.projectTitle}\nFormato de imagen: ${input.aspectRatio}\n</variables>`,
+    `<personajes_disponibles>\n${list(input.characters)}\n</personajes_disponibles>`,
+    `<locaciones_disponibles>\n${list(input.locations)}\n</locaciones_disponibles>`,
+    `<guion_original>\n${input.script.trim()}\n</guion_original>`,
+    "Adaptá el guion original al formato de esta app.",
+  ].join("\n\n");
+  return { system, user };
+}
+
+/** Etiqueta del origen de una versión, según sus generation_params. */
+export function scriptOrigin(params: Record<string, unknown>): string | null {
+  if (typeof params.adaptedFrom === "number") return `adaptada de la v${params.adaptedFrom}`;
+  if (params.imported) return typeof params.fileName === "string" ? `subida (${params.fileName})` : "pegada";
+  if (params.manual) return "edición manual";
+  return null;
+}
+
 /** Estadísticas del guion: cantidad de tomas y duración (declarada o estimada por la locución). */
 export function scriptStats(markdown: string): { shots: number; seconds: number } {
   const headers = [...markdown.matchAll(/^###\s+TOMA\s+\d+[^\n]*$/gim)];

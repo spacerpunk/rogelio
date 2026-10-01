@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { modelName } from "@/lib/engines/model-names";
 import type { Database } from "@/lib/supabase/database.types";
 import { FRAMING_LABEL, type Framing } from "./shotlist";
 
@@ -51,6 +52,9 @@ export type PromptShotInput = {
   location: Location | null;
   aspectRatio: string;
   engine: string;
+  /** Modelo de imagen exacto (ej. gemini-3.1-flash-image) y resolución de salida. */
+  model: string | null;
+  imageSize: string;
   clientNegative: string | null;
   referenceLabels: string[];
 };
@@ -75,8 +79,9 @@ function shotBrief({ shot, characters, location }: PromptShotInput): string[] {
 /** Input para Claude con el image system prompt del cliente como system. */
 export function buildImagePromptInput(input: PromptShotInput): string {
   return [
-    `Target model: ${TARGET_MODEL[input.engine] ?? input.engine}`,
+    `Target model: ${TARGET_MODEL[input.engine] ?? input.engine}${input.model ? ` — ${modelName(input.model)} (${input.model})` : ""}`,
     `Aspect ratio: ${input.aspectRatio}`,
+    input.engine === "gemini" ? `Output resolution: ${input.imageSize}` : "",
     ...shotBrief(input),
     input.referenceLabels.length
       ? `Reference images that will be attached automatically, in this order: ${input.referenceLabels.join("; ")}`

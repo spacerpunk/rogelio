@@ -28,10 +28,10 @@ motores). Correrla solo en la máquina local o en una red privada/VPN.
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase. La clave anónima solo sirve para subir archivos con URLs firmadas. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Todo el acceso a la base (solo servidor y worker). |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Claude: lectura de PDFs, guion, shot list y prompts. Recomendado `claude-opus-5`. |
-| `GEMINI_API_KEY`, `GEMINI_IMAGE_MODEL` | Gemini "Nano Banana". Recomendado `gemini-3.1-flash-image`. |
-| `OPENAI_API_KEY`, `OPENAI_IMAGE_MODEL` | OpenAI Images. Por ejemplo `gpt-image-2.5-sunburst` (precisión) o `gpt-image-2.5-flare` (rápido). |
-| `DEFAULT_IMAGE_ENGINE` | `gemini` u `openai`. |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Motor de texto Claude. Recomendado `claude-opus-5-5`. |
+| `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL` | Motor de texto Gemini (recomendado `gemini-3.8-flash`) y de imagen (recomendado `gemini-3.1-flash-image,gemini-3-pro-image`: Nano Banana 2 por defecto y Nano Banana Pro como opción). |
+| `OPENAI_API_KEY`, `OPENAI_TEXT_MODEL`, `OPENAI_IMAGE_MODEL` | Motor de texto GPT (recomendado `gpt-6.1-sol`) y OpenAI Images (`gpt-image-2.5-sunburst` para precisión o `gpt-image-2.5-flare` rápido). |
+| `DEFAULT_TEXT_ENGINE`, `DEFAULT_IMAGE_ENGINE` | Motores de los proyectos que no eligieron uno: `claude`, `openai` o `gemini` para texto; `gemini` u `openai` para imagen. |
 | `WORKER_CONCURRENCY` | Trabajos en paralelo del worker (por defecto 3). |
 | `ENGINE_MOCK` | `1` = motores simulados, sin claves ni costo (para probar la UI). |
 
@@ -47,17 +47,27 @@ Se configura en `supabase/config.toml`. Si Docker Desktop se reinicia y la API d
 1. **Biblioteca** (`/clients/[id]`): textos versionados (style bible, system prompts de guion, imagen y
    video, negativo), personajes con descriptor visual y sheets, locaciones con plates, y referencias
    (hoja de EPP, logo). Cada texto guarda versiones; una por tipo está "en uso".
-2. **Fuentes**: PDF (lo lee Claude), PPTX (texto, notas del orador e imágenes con JSZip), DOCX (mammoth),
-   TXT/MD o texto pegado. El texto extraído se revisa y edita antes de seguir.
-3. **Guion**: Claude usa el master prompt del cliente + un formato fijo de escenas y tomas numeradas.
-   Editor Markdown con versiones, "Regenerar con indicaciones" y "Aprobar guion".
-4. **Shot list**: salida estructurada de Claude validada con Zod, solo con personajes y locaciones de la
-   biblioteca. Tabla editable: reordenar arrastrando, dividir, fusionar, agregar y borrar planos. La
+2. **Fuentes**: PDF (lo lee el motor de texto), PPTX (texto, notas del orador e imágenes con JSZip), DOCX
+   (mammoth), TXT/MD o texto pegado. El texto extraído se revisa y edita antes de seguir.
+3. **Guion**: el motor de texto usa el master prompt del cliente + un formato fijo de escenas y tomas
+   numeradas. Editor Markdown con versiones, "Regenerar con indicaciones" y "Aprobar guion". También se
+   puede subir un guion existente (DOCX/TXT/MD directo, PDF con el motor de texto, o pegado): se guarda tal
+   cual (trabajo `import_script`) y "Adaptar al formato" lo pasa a escenas y tomas en otra versión
+   (`adapt_script`). El shot list acepta guiones sin tomas numeradas.
+4. **Shot list**: salida estructurada del motor de texto validada con Zod, solo con personajes y locaciones
+   de la biblioteca. Tabla editable: reordenar arrastrando, dividir, fusionar, agregar y borrar planos. La
    duración sale de la locución (~2,5 palabras/s). Editar un plano aprobado lo vuelve a borrador.
-5. **Frames**: Claude escribe `image_prompt`/`image_negative` (image system prompt) y un borrador de
+5. **Frames**: el motor de texto escribe `image_prompt`/`image_negative` (image system prompt) y un borrador de
    `video_prompt` (video system prompt). Cada plano adjunta solo sus sheets, la plate de la locación y la
    hoja de EPP. Variantes por plano o en lote, elegir, rechazar, notas de revisión y cambio de motor.
    Si el plano cambia después de generar el prompt, se marca como desactualizado.
+
+**Motores por proyecto**: el botón "Motores" del encabezado del proyecto elige el motor de texto (Claude,
+GPT o Gemini: PDFs, guion, shot list y prompts) y, para los frames, el motor de imagen (Gemini u OpenAI),
+el modelo, la resolución (1K/2K/4K, solo Gemini) y el formato. Se guardan en `projects.text_engine`,
+`image_engine`, `image_model`, `image_size` (default 2K) y `aspect_ratio` (default 16:9); en null se usa el
+default de `.env.local`. Las variables `*_MODEL` admiten una lista separada por comas (el primero es el
+default) y solo se pueden elegir modelos de esa lista.
 
 Cada llamada a un motor queda en `engine_calls` (modelo, duración, tokens y costo estimado); el costo
 del proyecto y su desglose están en el encabezado del proyecto.
@@ -81,7 +91,7 @@ supabase/migrations/     esquema, permisos, buckets y vistas de costos
 seed/clear/              documentos, sheets y JSON de personajes/locaciones de Clear Petroleum
 scripts/                 seed y generación de tipos
 worker/                  proceso que ejecuta la tabla jobs
-src/lib/engines/         adaptadores: Claude (texto), Gemini y OpenAI (imagen), simulados, precios y reintentos
+src/lib/engines/         adaptadores: Claude, GPT y Gemini (texto), Gemini y OpenAI (imagen), simulados, precios y reintentos
 src/lib/jobs/            cola, runner y handlers (extracción, guion, shot list, prompts, frames)
 src/lib/pipeline/        prompts y reglas de cada etapa
 src/lib/ingest/          extractores de PPTX y DOCX

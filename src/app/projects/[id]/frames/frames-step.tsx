@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useOptimistic, useState } from "react";
 import {
   AlertTriangleIcon,
   CheckIcon,
@@ -23,11 +23,12 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAction } from "@/hooks/use-action";
-import type { ImageEngineInfo } from "@/lib/engines/registry";
+import type { EngineInfo } from "@/lib/engines/registry";
 import type { JobProgress } from "@/lib/jobs/types";
 import { FRAMING_LABEL, type Framing } from "@/lib/pipeline/shotlist";
 import type { ProjectJob } from "@/lib/projects/data";
 import { cn } from "@/lib/utils";
+import { setProjectEngines } from "../../actions";
 import { isActive, useProjectJobs } from "../jobs-provider";
 import {
   generateFrames,
@@ -100,18 +101,26 @@ export function FramesStep({
   aspectRatio,
   shots,
   engines,
-  defaultEngine,
+  engine: projectEngine,
+  imageSummary,
 }: {
   projectId: string;
   aspectRatio: string;
   shots: ShotFramesView[];
-  engines: ImageEngineInfo[];
-  defaultEngine: string;
+  engines: EngineInfo[];
+  /** Motor de imagen del proyecto: elegirlo acá lo guarda en el proyecto. */
+  engine: string;
+  /** Modelo, resolución y formato con que se generan los frames (se cambian en Motores). */
+  imageSummary: string;
 }) {
   const { jobs, refresh } = useProjectJobs();
   const { pending, run } = useAction();
-  const firstConfigured = engines.find((e) => e.configured)?.name;
-  const [engine, setEngine] = useState(engines.find((e) => e.name === defaultEngine)?.configured ? defaultEngine : (firstConfigured ?? defaultEngine));
+  const [engine, setOptimisticEngine] = useOptimistic(projectEngine);
+  const setEngine = (name: string) =>
+    run(async () => {
+      setOptimisticEngine(name);
+      return setProjectEngines({ projectId, imageEngine: name });
+    });
   const [n, setN] = useState(4);
   const [showRejected, setShowRejected] = useState(false);
 
@@ -133,11 +142,17 @@ export function FramesStep({
             {engines.map((e) => (
               <SelectItem key={e.name} value={e.name} disabled={!e.configured}>
                 {e.label}
-                {e.configured ? ` · ${e.model}` : " · sin configurar"}
+                {!e.configured && " · sin configurar"}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-xs whitespace-nowrap text-muted-foreground">{imageSummary}</span>
+          </TooltipTrigger>
+          <TooltipContent>Modelo, resolución y formato: se cambian en Motores, arriba a la derecha.</TooltipContent>
+        </Tooltip>
         <Select value={String(n)} onValueChange={(v) => setN(Number(v))}>
           <SelectTrigger size="sm" className="w-32">
             <SelectValue />

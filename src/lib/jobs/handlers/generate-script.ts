@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getTextEngine } from "@/lib/engines/registry";
-import { activeTextContent, advanceProjectStatus, loadProjectContext } from "@/lib/pipeline/context";
+import { activeTextContent, advanceProjectStatus, insertScriptVersion, loadProjectContext } from "@/lib/pipeline/context";
 import { buildScriptPrompt, scriptParamsSchema, scriptStats } from "@/lib/pipeline/script";
 import type { JobHandler } from "../types";
 
@@ -58,33 +58,22 @@ export const generateScript: JobHandler = async (ctx) => {
         : undefined,
   });
 
-  const engine = getTextEngine();
-  await ctx.progress(0, 1, payload.baseVersion ? `Claude está reescribiendo la versión ${payload.baseVersion}` : "Claude está escribiendo el guion");
+  const engine = getTextEngine(context.project.text_engine);
+  await ctx.progress(
+    0,
+    1,
+    payload.baseVersion ? `${engine.label} está reescribiendo la versión ${payload.baseVersion}` : `${engine.label} está escribiendo el guion`,
+  );
   const result = await ctx.track(engine, "generate_script", () =>
     engine.complete({ system, content: user, maxTokens: 96_000, effort: "high" }),
   );
 
-  const { data: last } = await db
-    .from("scripts")
-    .select("version")
-    .eq("project_id", job.project_id)
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const version = (last?.version ?? 0) + 1;
-
-  const { error } = await db.from("scripts").insert({
-    project_id: job.project_id,
-    version,
-    content: result.text,
-    generation_params: {
-      ...payload.params,
-      ...(payload.baseVersion ? { baseVersion: payload.baseVersion, instructions: payload.instructions ?? "" } : {}),
-      model: result.model,
-      jobId: job.id,
-    },
+  const version = await insertScriptVersion(db, job.project_id, result.text, {
+    ...payload.params,
+    ...(payload.baseVersion ? { baseVersion: payload.baseVersion, instructions: payload.instructions ?? "" } : {}),
+    model: result.model,
+    jobId: job.id,
   });
-  if (error) throw new Error(`No se pudo guardar el guion: ${error.message}`);
   await advanceProjectStatus(db, job.project_id, "script");
 
   const stats = scriptStats(result.text);

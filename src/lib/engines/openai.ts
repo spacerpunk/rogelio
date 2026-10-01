@@ -1,11 +1,28 @@
 import OpenAI, { toFile } from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
+import type { z } from "zod";
 import { roundUsd } from "./pricing";
 import { sniffImageMime, withNegative } from "./image-utils";
-import { EngineError, type AspectRatio, type ImageEngine, type ImageRequest } from "./types";
+import { parseStructured } from "./structured";
+import {
+  EngineError,
+  causeDetail,
+  type AspectRatio,
+  type EngineResultMeta,
+  type ImageEngine,
+  type ImageRequest,
+  type TextEngine,
+  type TextInputBlock,
+  type TextRequest,
+} from "./types";
 
 // OpenAI Images (verificado en la documentación oficial al 2026-09-24): con referencias se usa
 // images.edit({ image: [...] }), sin referencias images.generate; `n` devuelve varias imágenes en una
 // llamada; no hay campo de negativo (se agrega al prompt); los rechazos llegan con code "moderation_blocked".
+//
+// Texto con la Responses API (verificado en la documentación oficial al 2026-09-30): PDFs como input_file
+// en base64 (hasta 50 MB), salida estructurada con text.format json_schema estricto y reasoning.effort
+// (low … max en la serie GPT-6).
 
 const ENGINE = "openai";
 const QUALITY = "medium" as const;
@@ -35,11 +52,22 @@ const LEGACY_SIZES: Record<AspectRatio, "1536x1024" | "1024x1536" | "1024x1024">
   "3:4": "1024x1536",
 };
 
-function toEngineError(error: unknown): EngineError {
+// Texto: USD por millón de tokens (entrada, entrada cacheada, salida). Los tokens de razonamiento
+// se cobran como salida. Orden: el primer prefijo que coincide gana.
+const TEXT_PRICES: [prefix: string, input: number, cachedInput: number, output: number][] = [
+  ["gpt-6-astra", 10, 1, 50],
+  ["gpt-6.1-sol", 2, 0.1, 10],
+  ["gpt-6-luna", 0.1, 0.01, 0.5],
+  ["gpt-5.4-mini", 0.75, 0.075, 4.5],
+  ["gpt-5-mini", 0.25, 0.025, 2],
+];
+const DEFAULT_MAX_TOKENS = 64_000;
+
+function toEngineError(error: unknown, modelVar: string): EngineError {
   if (error instanceof EngineError) return error;
   if (error instanceof OpenAI.APIError) {
     if (error.code === "moderation_blocked" || error.code === "content_policy_violation") {
-      return new EngineError("content_blocked", `OpenAI bloqueó la imagen por su política de contenido: ${error.message}`, ENGINE, error);
+      return new EngineError("content_blocked", `OpenAI bloqueó el pedido por su política de contenido: ${error.message}`, ENGINE, error);
     }
     if (error instanceof OpenAI.RateLimitError) {
       return new EngineError("rate_limit", "OpenAI: límite de uso alcanzado (rate limit o cuota). Se reintenta más tarde.", ENGINE, error);
@@ -48,13 +76,13 @@ function toEngineError(error: unknown): EngineError {
       return new EngineError("config", "OpenAI: la API key es inválida o no tiene permisos (revisá OPENAI_API_KEY).", ENGINE, error);
     }
     if (error instanceof OpenAI.NotFoundError) {
-      return new EngineError("config", "OpenAI: el modelo configurado no existe (revisá OPENAI_IMAGE_MODEL).", ENGINE, error);
+      return new EngineError("config", `OpenAI: el modelo configurado no existe (revisá ${modelVar}).`, ENGINE, error);
     }
     if (error instanceof OpenAI.BadRequestError) {
       return new EngineError("bad_request", `OpenAI rechazó el pedido: ${error.message}`, ENGINE, error);
     }
     if (error instanceof OpenAI.InternalServerError || error instanceof OpenAI.APIConnectionError) {
-      return new EngineError("unavailable", "OpenAI no está disponible en este momento. Se reintenta más tarde.", ENGINE, error);
+      return new EngineError("unavailable", `OpenAI no está disponible en este momento (${causeDetail(error)}). Se reintenta más tarde.`, ENGINE, error);
     }
   }
   return new EngineError("unknown", `OpenAI: ${error instanceof Error ? error.message : String(error)}`, ENGINE, error);
@@ -107,7 +135,106 @@ export class OpenAIImageEngine implements ImageEngine {
         durationMs: Date.now() - started,
       };
     } catch (error) {
-      throw toEngineError(error);
+      throw toEngineError(error, "OPENAI_IMAGE_MODEL");
     }
+  }
+}
+
+function toInputContent(content: TextRequest["content"]): OpenAI.Responses.ResponseInputContent[] {
+  const blocks: TextInputBlock[] = typeof content === "string" ? [{ type: "text", text: content }] : content;
+  return blocks.map((block): OpenAI.Responses.ResponseInputContent => {
+    switch (block.type) {
+      case "text":
+        return { type: "input_text", text: block.text };
+      case "pdf":
+        return { type: "input_file", filename: "documento.pdf", file_data: `data:application/pdf;base64,${block.data.toString("base64")}` };
+      case "image":
+        return { type: "input_image", detail: "auto", image_url: `data:${block.mimeType};base64,${block.data.toString("base64")}` };
+    }
+  });
+}
+
+export class OpenAITextEngine implements TextEngine {
+  readonly name = ENGINE;
+  readonly label = "GPT";
+  private client: OpenAI;
+
+  constructor(
+    readonly model: string,
+    apiKey: string,
+  ) {
+    // El SDK reintenta 429/5xx/conexión con backoff.
+    this.client = new OpenAI({ apiKey, maxRetries: 4 });
+  }
+
+  private async run(opts: TextRequest, format?: OpenAI.Responses.ResponseFormatTextConfig) {
+    const started = Date.now();
+    try {
+      // Streaming: guiones y shot lists largos superan los tiempos de una request normal.
+      const stream = this.client.responses.stream({
+        model: this.model,
+        ...(opts.system ? { instructions: opts.system } : {}),
+        input: [{ role: "user", content: toInputContent(opts.content) }],
+        max_output_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
+        ...(opts.effort ? { reasoning: { effort: opts.effort } } : {}),
+        ...(format ? { text: { format } } : {}),
+        // El material del cliente no queda guardado del lado de OpenAI.
+        store: false,
+      });
+      const response = await stream.finalResponse();
+
+      const refusal = response.output
+        .flatMap((item) => (item.type === "message" ? item.content : []))
+        .find((part) => part.type === "refusal");
+      if (refusal || response.incomplete_details?.reason === "content_filter") {
+        throw new EngineError(
+          "content_blocked",
+          `GPT rechazó generar este contenido${refusal ? `: ${refusal.refusal}` : " (filtro de contenido)"}. Revisá el material o reformulá las indicaciones.`,
+          ENGINE,
+        );
+      }
+      if (response.status === "incomplete") {
+        throw new EngineError(
+          "invalid_output",
+          "GPT se quedó sin tokens de salida antes de terminar. Probá con menos material o una duración menor.",
+          ENGINE,
+        );
+      }
+      if (response.status === "failed") {
+        throw new EngineError("unknown", `GPT: ${response.error?.message ?? "la respuesta falló"}`, ENGINE);
+      }
+
+      const usage = response.usage;
+      const cached = usage?.input_tokens_details?.cached_tokens ?? 0;
+      const engineUsage = {
+        inputTokens: Math.max(0, (usage?.input_tokens ?? 0) - cached),
+        outputTokens: usage?.output_tokens ?? 0,
+        cacheReadTokens: cached,
+      };
+      const price = TEXT_PRICES.find(([prefix]) => response.model.startsWith(prefix));
+      const cost = price
+        ? (engineUsage.inputTokens * price[1] + cached * price[2] + engineUsage.outputTokens * price[3]) / 1_000_000
+        : 0;
+      const meta: EngineResultMeta = {
+        model: response.model,
+        usage: engineUsage,
+        costUsd: roundUsd(cost),
+        durationMs: Date.now() - started,
+      };
+      return { text: response.output_text.trim(), meta };
+    } catch (error) {
+      throw toEngineError(error, "OPENAI_TEXT_MODEL");
+    }
+  }
+
+  async complete(opts: TextRequest) {
+    const { text, meta } = await this.run(opts);
+    if (!text) throw new EngineError("invalid_output", "GPT devolvió una respuesta vacía.", ENGINE);
+    return { text, ...meta };
+  }
+
+  async structured<T>(opts: TextRequest, schema: z.ZodType<T>) {
+    const { text, meta } = await this.run(opts, zodTextFormat(schema, "output"));
+    return { data: parseStructured(text, schema, ENGINE, this.label), ...meta };
   }
 }

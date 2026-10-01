@@ -1,6 +1,6 @@
-import { getImageEngine, getTextEngine } from "@/lib/engines/registry";
+import { defaultImageEngineName, getImageEngine, getTextEngine, listImageEngines } from "@/lib/engines/registry";
 import { EngineError } from "@/lib/engines/types";
-import type { AspectRatio } from "@/lib/engines/types";
+import type { AspectRatio, ImageSize } from "@/lib/engines/types";
 import type { Db, JobContext } from "@/lib/jobs/types";
 import { ensureThumbnail } from "@/lib/storage";
 import type { Database } from "@/lib/supabase/database.types";
@@ -38,6 +38,19 @@ export async function loadShotContext(db: Db, shotId: string): Promise<ShotConte
   return { shot, project, characters: ordered, location: location.data ?? null, references };
 }
 
+/**
+ * Ajustes de imagen del proyecto para un motor. El modelo guardado solo vale para el motor al que pertenece;
+ * con otro motor se usa el default de ese motor. model: el id efectivo (null si el motor no está configurado).
+ */
+export function imageSettings(project: ShotContext["project"], engineName: string) {
+  const savedModel = (project.image_engine ?? defaultImageEngineName()) === engineName ? project.image_model : null;
+  return {
+    savedModel,
+    model: savedModel ?? listImageEngines().find((e) => e.name === engineName)?.model ?? null,
+    size: project.image_size as ImageSize,
+  };
+}
+
 /** Personajes basados en personas reales sin consentimiento confirmado: no se generan frames con ellos. */
 export function assertConsent(ctx: ShotContext) {
   const missing = ctx.characters.filter((c) => c.based_on_real_person && !c.consent_confirmed);
@@ -50,7 +63,7 @@ export function assertConsent(ctx: ShotContext) {
   }
 }
 
-/** Claude escribe image_prompt e image_negative (image system prompt) y un borrador de video_prompt. */
+/** El motor de texto del proyecto escribe image_prompt e image_negative (image system prompt) y un borrador de video_prompt. */
 export async function generatePromptsForShot(job: JobContext, ctx: ShotContext, engineName: string): Promise<void> {
   const { db } = job;
   const clientId = ctx.project.client_id;
@@ -67,11 +80,13 @@ export async function generatePromptsForShot(job: JobContext, ctx: ShotContext, 
     location: ctx.location,
     aspectRatio: ctx.project.aspect_ratio,
     engine: engineName,
+    model: imageSettings(ctx.project, engineName).model,
+    imageSize: ctx.project.image_size,
     clientNegative,
     referenceLabels: ctx.references.map((r) => r.label),
   };
 
-  const text = getTextEngine();
+  const text = getTextEngine(ctx.project.text_engine);
   const image = await job.track(text, "image_prompt", () =>
     text.structured(
       { system: imageSystem, content: buildImagePromptInput(input), maxTokens: 16_000, effort: "medium", cacheSystem: true },
@@ -115,7 +130,8 @@ export async function generateFramesForShot(job: JobContext, ctx: ShotContext, e
   if (ctx.shot.status === "draft") throw new Error(`El plano ${ctx.shot.order_index + 1} no está aprobado: aprobá el shot list primero.`);
   if (!ctx.shot.image_prompt?.trim()) await generatePromptsForShot(job, ctx, engineName);
 
-  const engine = getImageEngine(engineName);
+  const settings = imageSettings(ctx.project, engineName);
+  const engine = getImageEngine(engineName, settings.savedModel);
   const references = await loadReferenceBuffers(db, ctx.references);
   const result = await job.track(engine, "generate_frames", () =>
     engine.generate({
@@ -123,6 +139,7 @@ export async function generateFramesForShot(job: JobContext, ctx: ShotContext, e
       negative: ctx.shot.image_negative ?? undefined,
       references,
       aspectRatio: ctx.project.aspect_ratio as AspectRatio,
+      size: settings.size,
       n,
     }),
   );

@@ -67,8 +67,11 @@ function sample(schema: Record<string, unknown>, ctx: { uuids: string[]; i: numb
 }
 
 export class MockTextEngine implements TextEngine {
-  readonly name = "mock";
   readonly model = "mock-text";
+  constructor(
+    readonly name = "mock",
+    readonly label = "Motor simulado",
+  ) {}
 
   async complete(opts: TextRequest) {
     await delay(1500);

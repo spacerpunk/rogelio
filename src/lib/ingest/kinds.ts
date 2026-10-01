@@ -37,6 +37,20 @@ export function unsupportedSourceMessage(fileName: string): string {
   return `${fileName}: formato no soportado (se aceptan PDF, PPTX, DOCX, TXT y MD).`;
 }
 
+/** Guion subido: los mismos formatos que las fuentes, menos PPTX. */
+export const SCRIPT_ACCEPT = ".docx,.pdf,.txt,.md";
+
+export function scriptFileKind(mimeType: string, fileName: string): Exclude<SourceKind, "pptx"> | null {
+  const kind = sourceKind(mimeType, fileName);
+  return kind === "pptx" ? null : kind;
+}
+
+export function unsupportedScriptMessage(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (ext === "doc") return `${fileName}: guardalo como DOCX para poder leerlo.`;
+  return `${fileName}: formato no soportado para un guion (se aceptan DOCX, PDF, TXT y MD).`;
+}
+
 /** Mime normalizado para guardar en la base (el navegador a veces manda vacío o genérico). */
 export function normalizedMime(kind: SourceKind): string {
   return {

@@ -2,7 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
 import { claudeCost, roundUsd } from "./pricing";
-import { EngineError, type EngineResultMeta, type TextEngine, type TextInputBlock, type TextRequest } from "./types";
+import { parseStructured } from "./structured";
+import { EngineError, causeDetail, type EngineResultMeta, type TextEngine, type TextInputBlock, type TextRequest } from "./types";
 
 const ENGINE = "claude";
 // Streaming siempre: guiones y shot lists largos superan los tiempos de una request normal.
@@ -53,7 +54,7 @@ function toEngineError(error: unknown): EngineError {
     return new EngineError("bad_request", `Claude rechazó el pedido: ${error.message}`, ENGINE, error);
   }
   if (error instanceof Anthropic.InternalServerError || error instanceof Anthropic.APIConnectionError) {
-    return new EngineError("unavailable", "Claude no está disponible en este momento. Se reintenta más tarde.", ENGINE, error);
+    return new EngineError("unavailable", `Claude no está disponible en este momento (${causeDetail(error)}). Se reintenta más tarde.`, ENGINE, error);
   }
   if (error instanceof Anthropic.APIError) {
     return new EngineError("unknown", `Claude: error ${error.status ?? ""} ${error.message}`, ENGINE, error);
@@ -63,6 +64,7 @@ function toEngineError(error: unknown): EngineError {
 
 export class ClaudeTextEngine implements TextEngine {
   readonly name = ENGINE;
+  readonly label = "Claude";
   private client: Anthropic;
 
   constructor(
@@ -145,20 +147,6 @@ export class ClaudeTextEngine implements TextEngine {
   async structured<T>(opts: TextRequest, schema: z.ZodType<T>) {
     const format = betaZodOutputFormat(schema);
     const { text, meta } = await this.run(opts, { type: format.type, schema: format.schema });
-    let json: unknown;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      throw new EngineError("invalid_output", "Claude devolvió un JSON inválido.", ENGINE);
-    }
-    const parsed = schema.safeParse(json);
-    if (!parsed.success) {
-      const detail = parsed.error.issues
-        .slice(0, 3)
-        .map((i) => `${i.path.join(".")}: ${i.message}`)
-        .join("; ");
-      throw new EngineError("invalid_output", `La respuesta de Claude no cumple el formato esperado (${detail}).`, ENGINE);
-    }
-    return { data: parsed.data, ...meta };
+    return { data: parseStructured(text, schema, ENGINE, this.label), ...meta };
   }
 }

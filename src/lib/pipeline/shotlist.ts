@@ -21,7 +21,7 @@ export function estimateDuration(voLine: string | null | undefined): number {
   return Math.max(2, Math.round((words / VO_WORDS_PER_SECOND) * 2) / 2);
 }
 
-// Schema de salida para Claude (salida estructurada). Los ids se validan contra la biblioteca después.
+// Schema de salida del motor de texto (salida estructurada). Los ids se validan contra la biblioteca después.
 export const shotlistOutputSchema = z.object({
   shots: z.array(
     z.object({
@@ -43,8 +43,9 @@ export type ShotlistOutput = z.infer<typeof shotlistOutputSchema>;
 export const SHOTLIST_SYSTEM = `Sos asistente de dirección de una productora de videos de capacitación. A partir de un guion aprobado armás el shot list: la lista estructurada de planos que después se usa para generar imágenes y video con IA.
 
 Reglas:
-- Cada TOMA del guion es un plano, en el mismo orden. No agregues ni saques tomas. Ignorá las secciones que no son tomas (Ficha, Personajes, Quiz, Cierre).
-- scene_number y scene_title salen del encabezado "Escena N — título" que contiene la toma.
+- Si el guion tiene TOMAS numeradas ("### TOMA 001 · …"), cada TOMA es un plano, en el mismo orden. No agregues ni saques tomas. Ignorá las secciones que no son tomas (Ficha, Personajes, Quiz, Cierre).
+- Si el guion no tiene TOMAS (por ejemplo, un guion subido con otro formato), dividilo vos en planos siguiendo el orden del texto: un plano por cada línea de locución o cambio claro de acción visual, sin omitir ni reescribir ninguna locución.
+- scene_number y scene_title salen del encabezado de escena que contiene la toma ("Escena N — título" o el equivalente del guion); si el guion no tiene escenas, usá 1 y el título del documento.
 - vo_line: la locución de la toma, textual, sin reescribirla. Cadena vacía si la toma no tiene locución.
 - action: qué se ve, en español, concreto y filmable: quién, qué hace, con qué manos, hacia dónde mira, qué equipo aparece. Una sola acción clara.
 - character_ids: los ids de los personajes que aparecen en cuadro, tomados de la lista. Lista vacía si no aparece nadie. Nunca inventes ids.
