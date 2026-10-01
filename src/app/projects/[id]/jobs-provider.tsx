@@ -8,6 +8,8 @@ import type { ProjectJob } from "@/lib/projects/data";
 const JOB_LABEL: Record<ProjectJob["type"], string> = {
   extract_source: "Extracción de fuente",
   generate_script: "Generación de guion",
+  import_script: "Importación de guion",
+  adapt_script: "Adaptación de guion",
   generate_shotlist: "Generación de shot list",
   generate_prompts: "Generación de prompts",
   generate_frames: "Generación de frames",

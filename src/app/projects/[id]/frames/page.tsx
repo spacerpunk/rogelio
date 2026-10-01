@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { modelName } from "@/lib/engines/model-names";
 import { defaultImageEngineName, listImageEngines } from "@/lib/engines/registry";
 import { shotPromptHash } from "@/lib/pipeline/prompts";
 import { pickReferences } from "@/lib/pipeline/references";
@@ -11,7 +12,11 @@ export const metadata: Metadata = { title: "Frames" };
 export default async function FramesPage({ params }: PageProps<"/projects/[id]/frames">) {
   const { id } = await params;
   const db = await createClient();
-  const { data: project } = await db.from("projects").select("client_id, aspect_ratio").eq("id", id).single();
+  const { data: project } = await db
+    .from("projects")
+    .select("client_id, aspect_ratio, image_engine, image_model, image_size")
+    .eq("id", id)
+    .single();
   const clientId = project!.client_id;
 
   const [shots, characters, locations, assets] = await Promise.all([
@@ -102,13 +107,22 @@ export default async function FramesPage({ params }: PageProps<"/projects/[id]/f
     };
   });
 
+  const engines = listImageEngines();
+  const imageEngine = project!.image_engine ?? defaultImageEngineName();
+  const imageModel = project!.image_model ?? engines.find((e) => e.name === imageEngine)?.model ?? null;
+
   return (
     <FramesStep
       projectId={id}
       aspectRatio={project!.aspect_ratio}
       shots={views}
-      engines={listImageEngines()}
-      defaultEngine={defaultImageEngineName()}
+      engines={engines}
+      engine={imageEngine}
+      imageSummary={[
+        imageModel ? modelName(imageModel) : "sin modelo",
+        ...(imageEngine === "gemini" ? [project!.image_size] : []),
+        project!.aspect_ratio,
+      ].join(" · ")}
     />
   );
 }

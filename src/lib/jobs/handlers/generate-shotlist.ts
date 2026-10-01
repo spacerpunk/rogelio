@@ -17,8 +17,8 @@ export const generateShotlist: JobHandler = async (ctx) => {
   if (!script) throw new Error("No hay un guion aprobado: aprobá una versión antes de generar el shot list.");
 
   const styleBible = await activeTextContent(db, context.project.client_id, "style_bible");
-  const engine = getTextEngine();
-  await ctx.progress(0, 1, `Claude está armando el shot list (guion v${script.version})`);
+  const engine = getTextEngine(context.project.text_engine);
+  await ctx.progress(0, 1, `${engine.label} está armando el shot list (guion v${script.version})`);
   const result = await ctx.track(engine, "generate_shotlist", () =>
     engine.structured(
       {
@@ -38,7 +38,7 @@ export const generateShotlist: JobHandler = async (ctx) => {
   );
 
   const shots = result.data.shots;
-  if (shots.length === 0) throw new Error("Claude no devolvió planos. Revisá que el guion tenga tomas.");
+  if (shots.length === 0) throw new Error(`${engine.label} no devolvió planos. Revisá que el guion tenga tomas.`);
 
   // Solo ids que existen en la biblioteca del cliente.
   const characterIds = new Set(context.characters.map((c) => c.id));

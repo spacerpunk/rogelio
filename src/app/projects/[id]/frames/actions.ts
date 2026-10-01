@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { runAction, throwIfError, type ActionResult } from "@/lib/action-result";
-import { listImageEngines } from "@/lib/engines/registry";
+import { assertEngineReady } from "@/lib/engines/registry";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { advanceProjectStatus } from "@/lib/pipeline/context";
 import { createClient } from "@/lib/supabase/server";
@@ -13,12 +13,6 @@ type Db = Awaited<ReturnType<typeof createClient>>;
 
 function revalidate(projectId: string) {
   revalidatePath(`/projects/${projectId}`, "layout");
-}
-
-function assertEngine(name: string) {
-  const engine = listImageEngines().find((e) => e.name === name);
-  if (!engine) throw new Error(`No existe el motor de imagen "${name}".`);
-  if (!engine.configured) throw new Error(`${engine.label} no está configurado: completá su API key y modelo en .env.local.`);
 }
 
 /** Trabajos activos que ya incluyen alguno de estos planos (para no duplicar gasto). */
@@ -60,7 +54,7 @@ export async function generateFrames(input: {
     const data = z
       .object({ projectId: uuid, shotIds: z.array(uuid).min(1, "No hay planos para generar"), engine: z.string(), n: z.number().int().min(1).max(8) })
       .parse(input);
-    assertEngine(data.engine);
+    assertEngineReady("image", data.engine);
     const db = await createClient();
     const { data: shots } = await db.from("shots").select("id, status").in("id", data.shotIds).is("deleted_at", null);
     const drafts = (shots ?? []).filter((s) => s.status === "draft");

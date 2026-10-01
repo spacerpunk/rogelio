@@ -3,16 +3,20 @@ import { ZodError } from "zod";
 import { roundUsd } from "@/lib/engines/pricing";
 import { EngineError } from "@/lib/engines/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
+import { adaptScript } from "./handlers/adapt-script";
 import { extractSource } from "./handlers/extract-source";
 import { generateScript } from "./handlers/generate-script";
 import { generateFrames } from "./handlers/generate-frames";
 import { generatePrompts } from "./handlers/generate-prompts";
 import { generateShotlist } from "./handlers/generate-shotlist";
+import { importScript } from "./handlers/import-script";
 import type { Db, JobContext, JobHandler, JobRow, JobType } from "./types";
 
 const HANDLERS: Partial<Record<JobType, JobHandler>> = {
   extract_source: extractSource,
   generate_script: generateScript,
+  import_script: importScript,
+  adapt_script: adaptScript,
   generate_shotlist: generateShotlist,
   generate_prompts: generatePrompts,
   generate_frames: generateFrames,

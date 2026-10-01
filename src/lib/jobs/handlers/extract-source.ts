@@ -39,10 +39,11 @@ export const extractSource: JobHandler = async (ctx) => {
 
   if (kind === "pdf") {
     if (file.length > MAX_PDF_BYTES) {
-      throw new Error("El PDF pesa más de 24 MB: dividilo o exportalo más liviano para que Claude pueda leerlo.");
+      throw new Error("El PDF pesa más de 24 MB: dividilo o exportalo más liviano para que el motor de texto pueda leerlo.");
     }
-    const engine = getTextEngine();
-    await ctx.progress(0, 1, "Claude está leyendo el PDF");
+    const { data: project } = await db.from("projects").select("text_engine").eq("id", source.project_id).single();
+    const engine = getTextEngine(project?.text_engine ?? null);
+    await ctx.progress(0, 1, `${engine.label} está leyendo el PDF`);
     const result = await ctx.track(engine, "extract_pdf", () =>
       engine.complete({
         system: PDF_SYSTEM,

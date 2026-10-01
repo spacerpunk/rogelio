@@ -89,17 +89,30 @@ Van en `.env.local` (nunca en el código ni en el repo):
 
 | Variable | Qué es | Valor recomendado |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | Clave de Claude | La tuya |
-| `ANTHROPIC_MODEL` | Modelo de Claude (guion, shot list, prompts, lectura de PDFs) | `claude-opus-5` |
-| `GEMINI_API_KEY` | Clave de Gemini | La tuya |
-| `GEMINI_IMAGE_MODEL` | Modelo de imagen de Gemini ("Nano Banana") | `gemini-3.1-flash-image` |
-| `OPENAI_API_KEY` | Clave de OpenAI | La tuya |
+| `ANTHROPIC_API_KEY` | Clave de Anthropic (Claude) | La tuya |
+| `ANTHROPIC_MODEL` | Modelo de texto de Claude | `claude-opus-5-5` |
+| `GEMINI_API_KEY` | Clave de Google (Gemini, para texto e imagen) | La tuya |
+| `GEMINI_TEXT_MODEL` | Modelo de texto de Gemini | `gemini-3.8-flash` (estable) o `gemini-3.1-pro-preview` |
+| `GEMINI_IMAGE_MODEL` | Modelos de imagen de Gemini que se pueden elegir (el primero es el default) | `gemini-3.1-flash-image,gemini-3-pro-image` (Nano Banana 2 y Nano Banana Pro) |
+| `OPENAI_API_KEY` | Clave de OpenAI (GPT, para texto e imagen) | La tuya |
+| `OPENAI_TEXT_MODEL` | Modelo de texto de OpenAI | `gpt-6.1-sol` (o `gpt-6-astra`, el más capaz) |
 | `OPENAI_IMAGE_MODEL` | Modelo de imagen de OpenAI | `gpt-image-2.5-sunburst` (más preciso con referencias) o `gpt-image-2.5-flare` (más rápido) |
-| `DEFAULT_IMAGE_ENGINE` | Motor de imagen elegido por defecto | `gemini` u `openai` |
+| `DEFAULT_TEXT_ENGINE` | Motor de texto de los proyectos que no eligieron uno | `claude`, `openai` o `gemini` |
+| `DEFAULT_IMAGE_ENGINE` | Motor de imagen de los proyectos que no eligieron uno | `gemini` u `openai` |
 | `WORKER_CONCURRENCY` | Cuántos trabajos corre el worker en paralelo | `3` |
 
-Claude es obligatorio para casi todo (leer PDFs, guion, shot list, prompts). De los motores de imagen
-alcanza con uno. Después de cambiar `.env.local`, reiniciá `npm run dev`.
+Hace falta **un motor de texto** (Claude, GPT o Gemini: lee los PDFs y escribe guion, shot list y
+prompts) y **un motor de imagen** (Gemini u OpenAI). Con una sola clave de Google o de OpenAI ya tenés
+los dos. Después de cambiar `.env.local`, reiniciá `npm run dev`.
+
+Cada proyecto elige sus motores con el botón **Motores** del encabezado (y el de imagen también desde el
+paso Frames). Los que no tienen clave y modelo aparecen como "sin configurar". Los master prompts del
+cliente se escribieron pensando en Claude: con otro motor conviene revisar el primer guion con más cuidado.
+
+En la misma ventana, la sección **Imagen** define cómo se generan los frames del proyecto: **modelo**
+(entre los de la lista de `.env.local`; por defecto Nano Banana 2), **resolución** (1K, 2K o 4K; por
+defecto 2K, solo Gemini) y **formato** (por defecto 16:9). Con Nano Banana 2 cada imagen cuesta unos
+US$ 0,067 a 1K, US$ 0,10 a 2K y US$ 0,15 a 4K. Los cambios aplican a los frames que se generen después.
 
 ### Modo de prueba (sin claves)
 
@@ -170,7 +183,7 @@ Subí el material del cliente con **Subir archivos** (podés elegir varios) o **
 
 | Tipo | Cómo se lee |
 | --- | --- |
-| PDF | Lo lee Claude y lo transcribe en orden, página por página, describiendo las fotos y diagramas importantes. Máximo ~24 MB. |
+| PDF | Lo lee el motor de texto del proyecto y lo transcribe en orden, página por página, describiendo las fotos y diagramas importantes. Máximo ~24 MB. |
 | PPTX | Se saca el texto de cada diapositiva en orden, las **notas del orador** y las imágenes embebidas. |
 | DOCX | Se saca el texto con títulos, listas y tablas. |
 | TXT / MD / texto pegado | Se usa tal cual. |
@@ -191,21 +204,32 @@ A la izquierda completás los parámetros:
 
 Después tocás **Generar guion**.
 
-Claude escribe el guion siguiendo el master prompt del cliente y un formato fijo:
+El motor de texto del proyecto escribe el guion siguiendo el master prompt del cliente y un formato fijo:
 - **escenas numeradas**, divididas en **tomas**;
 - cada toma trae duración, tipo de plano, locución, acción visual, personajes, locación y texto en pantalla.
 
 Arriba ves la cantidad de tomas y la duración estimada. Desde ahí podés:
 - **Editar** el Markdown a mano. Al guardar se crea una versión nueva.
-- **Regenerar con indicaciones** ("acortá la escena 2", "usá a Norma de protagonista"). Claude reescribe
+- **Regenerar con indicaciones** ("acortá la escena 2", "usá a Norma de protagonista"). El motor reescribe
   la versión que estás viendo y crea una nueva.
 - Cambiar de versión con el selector.
 - **Aprobar guion**. Solo hay una versión aprobada a la vez, y el shot list sale de esa.
 
+**Si ya tenés el guion**, usá **Subir un guion que ya tengo** (abajo del panel de la izquierda; no hace falta
+cargar fuentes). Acepta DOCX, TXT o MD, que se leen directo, o un PDF, que lo transcribe el motor de texto y
+suma una llamada al costo. También podés pegarlo. Se guarda **tal cual** como una versión nueva, que se edita
+y se aprueba como cualquier otra.
+
+Si el guion subido no sigue el formato de escenas y tomas, arriba aparece **Adaptar al formato**: el motor
+de texto lo pasa a escenas y tomas en una versión nueva, sin reescribir la locución, con duración estimada y
+los personajes y locaciones de la biblioteca. No es obligatorio: el shot list también funciona con el guion
+sin adaptar.
+
 ### Paso 4: shot list
 
-**Generar shot list** convierte cada toma del guion aprobado en un **plano**. Claude usa solo personajes
-y locaciones que existen en la biblioteca.
+**Generar shot list** convierte cada toma del guion aprobado en un **plano**. Si el guion no tiene tomas
+numeradas (por ejemplo, uno subido sin adaptar), el motor lo divide en planos siguiendo el texto, sin
+reescribir la locución. El motor de texto usa solo personajes y locaciones que existen en la biblioteca.
 
 La tabla es editable, y cada cambio se guarda al salir del campo. Podés:
 - editar encuadre, personajes, locación, acción, locución, texto en pantalla, iluminación y notas;
@@ -232,7 +256,7 @@ muestra:
 - la grilla de frames.
 
 Botones:
-- **Generar prompt / Regenerar prompt**: Claude escribe el prompt de imagen y el negativo con el system
+- **Generar prompt / Regenerar prompt**: el motor de texto escribe el prompt de imagen y el negativo con el system
   prompt de imagen del cliente. También escribe un borrador de prompt de video para la fase 2.
 - **Generar N variantes**: genera frames de ese plano. Si no tenía prompt, primero lo escribe.
 - **Prompts faltantes**: prompts en lote para los planos que no tienen o que quedaron desactualizados.
@@ -286,11 +310,15 @@ Cada proveedor está detrás de un **adaptador** con una interfaz común (`src/l
 | Adaptador | Para qué | Cómo |
 | --- | --- | --- |
 | `ClaudeTextEngine` | Texto: PDF, guion, shot list, prompts | Streaming, pensamiento adaptativo, salida JSON validada con Zod, fallback automático si un filtro de seguridad rechaza el pedido |
+| `OpenAITextEngine` | Texto: PDF, guion, shot list, prompts | Responses API en streaming, esfuerzo de razonamiento, JSON Schema estricto validado con Zod |
+| `GeminiTextEngine` | Texto: PDF, guion, shot list, prompts | Interactions API, nivel de pensamiento, JSON Schema validado con Zod, hasta 65.536 tokens de salida |
 | `GeminiImageEngine` | Frames | Interactions API, hasta 14 referencias, una imagen por llamada (las variantes van en paralelo) |
 | `OpenAIImageEngine` | Frames | `images.edit` con las referencias (o `images.generate` si no hay), varias variantes por llamada |
 
 Los **nombres de modelo salen siempre de `.env.local`**. Hay un **registro central** que la UI consulta
-para ofrecer los motores configurados.
+para ofrecer los motores configurados. El motor de texto y el de imagen se eligen por proyecto
+(`projects.text_engine` / `projects.image_engine`) y cada trabajo usa el que tenga el proyecto al
+ejecutarse.
 
 Todos manejan igual los errores:
 - **Rate limit y caídas del servicio:** se reintentan con espera creciente.
@@ -358,7 +386,7 @@ El costo se calcula con los precios públicos de cada proveedor (en `src/lib/eng
 | Síntoma | Qué hacer |
 | --- | --- |
 | Los trabajos quedan "En cola" y no avanzan | El worker no está corriendo. Usá `npm run dev` (levanta web + worker) o `npm run worker` en otra consola. |
-| "Falta configurar Claude / Gemini / OpenAI" | Falta la clave o el modelo en `.env.local`. Completalos y reiniciá `npm run dev`. |
+| "Falta configurar Claude / GPT / Gemini / OpenAI Images" | Falta la clave o el modelo en `.env.local`. Completalos y reiniciá `npm run dev`, o elegí otro motor en **Motores**. |
 | "Límite de uso alcanzado (rate limit)" | El proveedor limitó los pedidos. La app ya reintentó; esperá un rato y volvé a generar. |
 | "Bloqueó el pedido por sus filtros de contenido" | Reformulá el prompt del plano (o las indicaciones) y regenerá. |
 | "Falta confirmar el consentimiento de …" | Biblioteca del cliente → Personajes → marcá "Consentimiento firmado y confirmado". |
@@ -383,7 +411,7 @@ El costo se calcula con los precios públicos de cada proveedor (en `src/lib/eng
 | `supabase/migrations/` | Esquema, permisos, buckets y vistas de costos. Cada cambio de base es una migración nueva. |
 | `seed/clear/` | Documentos, sheets y JSON de personajes y locaciones de Clear Petroleum |
 | `worker/` | El proceso de trabajos |
-| `src/lib/engines/` | Adaptadores de Claude, Gemini, OpenAI, los simulados, precios y reintentos |
+| `src/lib/engines/` | Adaptadores de texto (Claude, GPT, Gemini) e imagen (Gemini, OpenAI), los simulados, precios y reintentos |
 | `src/lib/jobs/` | Cola, runner y un handler por tipo de trabajo |
 | `src/lib/pipeline/` | Cómo se arma cada etapa: prompts, reglas del shot list, referencias |
 | `src/lib/ingest/` | Lectores de PPTX y DOCX |

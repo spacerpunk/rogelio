@@ -40,11 +40,10 @@ export default async function ScriptPage({ params }: PageProps<"/projects/[id]/s
     params: s.generation_params as Record<string, unknown>,
   }));
 
-  // Parámetros por defecto: los del último guion generado, o los del proyecto.
-  const lastGenerated = versions.find((v) => !v.params.manual);
-  const parsed = scriptParamsSchema.safeParse(lastGenerated?.params);
+  // Parámetros por defecto: los del último guion generado (las versiones subidas o editadas no tienen), o los del proyecto.
+  const parsed = versions.map((v) => scriptParamsSchema.safeParse(v.params)).find((r) => r.success);
   const allCharacterIds = (characters.data ?? []).map((c) => c.id);
-  const initialParams: ScriptParams = parsed.success
+  const initialParams: ScriptParams = parsed?.success
     ? parsed.data
     : defaultScriptParams(project?.target_duration_sec ?? null, allCharacterIds);
 

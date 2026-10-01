@@ -38,6 +38,8 @@ export type CostLine = {
 export const OPERATION_LABEL: Record<string, string> = {
   extract_pdf: "Lectura de PDF",
   generate_script: "Guion",
+  import_script_pdf: "Guion subido (lectura de PDF)",
+  adapt_script: "Guion (adaptación al formato)",
   generate_shotlist: "Shot list",
   image_prompt: "Prompts de imagen",
   video_prompt: "Prompts de video",

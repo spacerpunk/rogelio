@@ -511,9 +511,13 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           id: string
+          image_engine: string | null
+          image_model: string | null
+          image_size: string
           notes: string | null
           status: Database["public"]["Enums"]["project_status"]
           target_duration_sec: number | null
+          text_engine: string | null
           title: string
           updated_at: string
         }
@@ -523,9 +527,13 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          image_engine?: string | null
+          image_model?: string | null
+          image_size?: string
           notes?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           target_duration_sec?: number | null
+          text_engine?: string | null
           title: string
           updated_at?: string
         }
@@ -535,9 +543,13 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          image_engine?: string | null
+          image_model?: string | null
+          image_size?: string
           notes?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           target_duration_sec?: number | null
+          text_engine?: string | null
           title?: string
           updated_at?: string
         }
@@ -948,6 +960,8 @@ export type Database = {
         | "generate_shotlist"
         | "generate_prompts"
         | "generate_frames"
+        | "import_script"
+        | "adapt_script"
       project_status: "draft" | "script" | "shotlist" | "frames" | "done"
       script_status: "draft" | "approved"
       shot_framing: "hero" | "wide" | "medium" | "closeup" | "insert" | "group"
@@ -1101,6 +1115,8 @@ export const Constants = {
         "generate_shotlist",
         "generate_prompts",
         "generate_frames",
+        "import_script",
+        "adapt_script",
       ],
       project_status: ["draft", "script", "shotlist", "frames", "done"],
       script_status: ["draft", "approved"],
