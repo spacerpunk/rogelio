@@ -45,8 +45,9 @@ Se configura en `supabase/config.toml`. Si Docker Desktop se reinicia y la API d
 ## Flujo
 
 1. **Biblioteca** (`/clients/[id]`): textos versionados (style bible, system prompts de guion, imagen y
-   video, negativo), personajes con descriptor visual y sheets, locaciones con plates, y referencias
-   (hoja de EPP, logo). Cada texto guarda versiones; una por tipo está "en uso".
+   video, negativo), personajes con descriptor visual y sheets, locaciones con código de plate (P1, P7…:
+   `locations.code`) y una o más plates, y referencias (hoja de EPP, logo). Cada texto guarda versiones;
+   una por tipo está "en uso". El guion cita las locaciones como "P7 · Campamento".
 2. **Fuentes**: PDF (lo lee el motor de texto), PPTX (texto, notas del orador e imágenes con JSZip), DOCX
    (mammoth), TXT/MD o texto pegado. El texto extraído se revisa y edita antes de seguir.
 3. **Guion**: el motor de texto usa el master prompt del cliente + un formato fijo de escenas y tomas
@@ -57,14 +58,25 @@ Se configura en `supabase/config.toml`. Si Docker Desktop se reinicia y la API d
 4. **Shot list**: salida estructurada del motor de texto validada con Zod, solo con personajes y locaciones
    de la biblioteca. Tabla editable: reordenar arrastrando, dividir, fusionar, agregar y borrar planos. La
    duración sale de la locución (~2,5 palabras/s). Editar un plano aprobado lo vuelve a borrador.
-5. **Frames**: el motor de texto escribe `image_prompt`/`image_negative` (image system prompt) y un borrador de
-   `video_prompt` (video system prompt). Cada plano adjunta solo sus sheets, la plate de la locación y la
-   hoja de EPP. Variantes por plano o en lote, elegir, rechazar, notas de revisión y cambio de motor.
+5. **Frames**: el motor de texto escribe `image_prompt`/`image_negative` (image system prompt). Cada plano
+   adjunta solo sus sheets, las plates de la locación y la hoja de EPP. Variantes por plano o en lote,
+   aprobar (uno por plano: es el primer cuadro del video), rechazar, notas de revisión y cambio de motor.
    Si el plano cambia después de generar el prompt, se marca como desactualizado.
+6. **Video** (`/projects/[id]/video`): el motor de texto mira el frame aprobado y, con el video system
+   prompt, escribe `video_prompt`, `video_negative` (Avoid), `video_duration_sec` y `video_qa_notes`
+   (correcciones antes de animar); `video_prompt_frame_id` marca para qué frame se escribió. El motor de
+   video (`VideoEngine`; hoy `GeminiVideoEngine` con Gemini Omni) genera los clips desde ese frame más las
+   sheets de los personajes. Trabajos `generate_video_prompts` y `generate_clips`; clips en la tabla `clips`
+   (uno aprobado por plano).
+
+**Settings** (`/settings`): por cliente y por paso del pipeline, qué system prompt y qué textos recibe el
+motor, en orden. Los de la biblioteca se editan ahí (versión nueva); los internos de la app se muestran
+de solo lectura (`src/lib/settings/steps.ts`).
 
 **Motores por proyecto**: el botón "Motores" del encabezado del proyecto elige el motor de texto (Claude,
-GPT o Gemini: PDFs, guion, shot list y prompts) y, para los frames, el motor de imagen (Gemini u OpenAI),
-el modelo, la resolución (1K/2K/4K, solo Gemini) y el formato. Se guardan en `projects.text_engine`,
+GPT o Gemini: PDFs, guion, shot list y prompts); para los frames, el motor de imagen (Gemini u OpenAI),
+el modelo, la resolución (1K/2K/4K, solo Gemini) y el formato; y para los clips, el motor y modelo de
+video, la resolución (`video_resolution`, default 720p) y el modo logo (`video_logo`). Se guardan en `projects.text_engine`,
 `image_engine`, `image_model`, `image_size` (default 2K) y `aspect_ratio` (default 16:9); en null se usa el
 default de `.env.local`. Las variables `*_MODEL` admiten una lista separada por comas (el primero es el
 default) y solo se pueden elegir modelos de esa lista.

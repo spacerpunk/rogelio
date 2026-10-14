@@ -5,10 +5,12 @@ import { EngineError } from "@/lib/engines/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { adaptScript } from "./handlers/adapt-script";
 import { extractSource } from "./handlers/extract-source";
+import { generateClips } from "./handlers/generate-clips";
 import { generateScript } from "./handlers/generate-script";
 import { generateFrames } from "./handlers/generate-frames";
 import { generatePrompts } from "./handlers/generate-prompts";
 import { generateShotlist } from "./handlers/generate-shotlist";
+import { generateVideoPrompts } from "./handlers/generate-video-prompts";
 import { importScript } from "./handlers/import-script";
 import type { Db, JobContext, JobHandler, JobRow, JobType } from "./types";
 
@@ -20,6 +22,8 @@ const HANDLERS: Partial<Record<JobType, JobHandler>> = {
   generate_shotlist: generateShotlist,
   generate_prompts: generatePrompts,
   generate_frames: generateFrames,
+  generate_video_prompts: generateVideoPrompts,
+  generate_clips: generateClips,
 };
 
 const HEARTBEAT_MS = 15_000;

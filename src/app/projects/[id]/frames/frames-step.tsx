@@ -69,7 +69,6 @@ export type ShotFramesView = {
   location: string | null;
   imagePrompt: string | null;
   imageNegative: string | null;
-  videoPrompt: string | null;
   promptStale: boolean;
   references: { label: string; thumbUrl: string }[];
   frames: FrameView[];
@@ -192,7 +191,7 @@ export function FramesStep({
         >
           <Button size="sm" disabled={pending || needFrames.length === 0 || !engineInfo?.configured}>
             <ImagesIcon />
-            Lote: planos sin frame elegido · {needFrames.length}
+            Lote: planos sin frame aprobado · {needFrames.length}
           </Button>
         </ConfirmButton>
         {batches.map((b) => {
@@ -210,7 +209,7 @@ export function FramesStep({
             Mostrar rechazados
           </label>
           <span className={cn(selectedCount === shots.length && shots.length > 0 && "text-emerald-500")}>
-            {selectedCount}/{shots.length} con frame elegido
+            {selectedCount}/{shots.length} con frame aprobado
           </span>
         </div>
       </div>
@@ -280,7 +279,7 @@ function ShotFrames({
             Escena {shot.sceneNumber}
             {shot.sceneTitle ? ` · ${shot.sceneTitle}` : ""}
           </span>
-          {shot.status === "frame_selected" && <Badge className="bg-emerald-500/15 text-emerald-500">Frame elegido</Badge>}
+          {shot.status === "frame_selected" && <Badge className="bg-emerald-500/15 text-emerald-500">Frame aprobado</Badge>}
           {shot.status === "draft" && <Badge variant="secondary">Sin aprobar</Badge>}
         </div>
         <div className="text-xs text-muted-foreground">
@@ -391,16 +390,14 @@ function PromptEditor({ shot }: { shot: ShotFramesView }) {
   const { run } = useAction();
   const [prompt, setPrompt] = useState(shot.imagePrompt ?? "");
   const [negative, setNegative] = useState(shot.imageNegative ?? "");
-  const [video, setVideo] = useState(shot.videoPrompt ?? "");
-  const [synced, setSynced] = useState({ p: shot.imagePrompt, n: shot.imageNegative, v: shot.videoPrompt });
-  if (synced.p !== shot.imagePrompt || synced.n !== shot.imageNegative || synced.v !== shot.videoPrompt) {
-    setSynced({ p: shot.imagePrompt, n: shot.imageNegative, v: shot.videoPrompt });
+  const [synced, setSynced] = useState({ p: shot.imagePrompt, n: shot.imageNegative });
+  if (synced.p !== shot.imagePrompt || synced.n !== shot.imageNegative) {
+    setSynced({ p: shot.imagePrompt, n: shot.imageNegative });
     setPrompt(shot.imagePrompt ?? "");
     setNegative(shot.imageNegative ?? "");
-    setVideo(shot.videoPrompt ?? "");
   }
 
-  const commit = (field: "image_prompt" | "image_negative" | "video_prompt", value: string, original: string | null) => {
+  const commit = (field: "image_prompt" | "image_negative", value: string, original: string | null) => {
     if (value.trim() !== (original ?? "").trim()) run(() => updateShotPrompt(shot.id, { [field]: value.trim() || null }), { success: "Prompt guardado" });
   };
 
@@ -425,17 +422,6 @@ function PromptEditor({ shot }: { shot: ShotFramesView }) {
           onBlur={() => commit("image_negative", negative, shot.imageNegative)}
           className="max-h-32 min-h-12 resize-none font-mono text-[11px] leading-snug md:text-[11px]"
         />
-        {shot.videoPrompt !== null && (
-          <details>
-            <summary className="cursor-pointer text-[11px] text-muted-foreground select-none">Borrador de video prompt (fase 2)</summary>
-            <Textarea
-              value={video}
-              onChange={(e) => setVideo(e.target.value)}
-              onBlur={() => commit("video_prompt", video, shot.videoPrompt)}
-              className="mt-1 max-h-60 min-h-20 resize-none font-mono text-[11px] leading-snug md:text-[11px]"
-            />
-          </details>
-        )}
       </div>
     </details>
   );
@@ -461,7 +447,12 @@ function FrameTile({ frame, aspectClass }: { frame: FrameView; aspectClass: stri
         <span className="rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white tabular-nums">
           v{frame.variantIndex} · {frame.engine}
         </span>
-        {frame.selected && <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] text-white">Elegido</span>}
+        {frame.selected && (
+          <span className="flex items-center gap-0.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
+            <CheckIcon className="size-3" />
+            Aprobado
+          </span>
+        )}
         {frame.promptChanged && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -471,16 +462,30 @@ function FrameTile({ frame, aspectClass }: { frame: FrameView; aspectClass: stri
           </Tooltip>
         )}
       </div>
-      <div className="absolute right-1 bottom-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <div className="flex items-center gap-1 border-t bg-background/90 p-1">
         {frame.selected ? (
-          <Button size="icon-xs" variant="secondary" aria-label="Quitar elegido" disabled={pending} onClick={() => run(() => unselectFrame(frame.id))}>
+          <Button
+            size="xs"
+            variant="outline"
+            className="border-emerald-500/50 text-emerald-600 dark:text-emerald-400"
+            disabled={pending}
+            onClick={() => run(() => unselectFrame(frame.id), { success: "Aprobación quitada" })}
+          >
             <UndoIcon />
+            Quitar aprobación
           </Button>
         ) : (
-          <Button size="icon-xs" aria-label="Elegir este frame" disabled={pending} onClick={() => run(() => selectFrame(frame.id), { success: "Frame elegido" })}>
+          <Button
+            size="xs"
+            className="bg-emerald-600 text-white hover:bg-emerald-600/90"
+            disabled={pending || frame.rejected}
+            onClick={() => run(() => selectFrame(frame.id), { success: "Frame aprobado: es el primer frame del video" })}
+          >
             <CheckIcon />
+            Aprobar
           </Button>
         )}
+        <span className="flex-1" />
         {!frame.selected && (
           <Button
             size="icon-xs"

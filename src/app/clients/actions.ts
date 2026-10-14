@@ -11,6 +11,12 @@ import { createClient } from "@/lib/supabase/server";
 const uuid = z.uuid();
 const assetKind = z.enum(Object.keys(ASSET_KINDS) as [AssetKind, ...AssetKind[]]);
 
+/** La biblioteca se ve en la ficha del cliente y en Settings (system prompts por paso). */
+function revalidateLibrary(clientId: string) {
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/settings");
+}
+
 function slugify(name: string): string {
   return name
     .normalize("NFD")
@@ -53,7 +59,7 @@ export async function updateClient(input: { clientId: string; name: string; note
       await db.from("clients").update({ name: data.name, notes: data.notes || null }).eq("id", data.clientId),
       "No se pudo guardar",
     );
-    revalidatePath(`/clients/${data.clientId}`);
+    revalidateLibrary(data.clientId);
     revalidatePath("/clients");
     return null;
   });
@@ -117,7 +123,7 @@ export async function createTextAsset(input: {
       .select("lineage_id")
       .single();
     throwIfError({ error }, "No se pudo crear el texto");
-    revalidatePath(`/clients/${data.clientId}`);
+    revalidateLibrary(data.clientId);
     return row!.lineage_id;
   });
 }
@@ -161,7 +167,7 @@ export async function saveTextVersion(input: { assetId: string; title: string; c
       .select("id")
       .single();
     throwIfError({ error: insertError }, "No se pudo guardar la versión");
-    revalidatePath(`/clients/${base!.client_id}`);
+    revalidateLibrary(base!.client_id);
     return row!.id;
   });
 }
@@ -184,7 +190,7 @@ export async function activateAsset(assetId: string): Promise<ActionResult> {
       "No se pudo desactivar",
     );
     throwIfError(await db.from("library_assets").update({ is_active: true }).eq("id", asset!.id), "No se pudo activar");
-    revalidatePath(`/clients/${asset!.client_id}`);
+    revalidateLibrary(asset!.client_id);
     return null;
   });
 }
@@ -199,7 +205,7 @@ export async function deactivateAsset(assetId: string): Promise<ActionResult> {
       .select("client_id")
       .single();
     throwIfError({ error }, "No se pudo desactivar");
-    revalidatePath(`/clients/${asset!.client_id}`);
+    revalidateLibrary(asset!.client_id);
     return null;
   });
 }
@@ -231,7 +237,7 @@ export async function deleteAsset(assetId: string): Promise<ActionResult> {
     for (const l of locations.data ?? []) {
       await db.from("locations").update({ plate_asset_ids: l.plate_asset_ids.filter((id) => !ids.includes(id)) }).eq("id", l.id);
     }
-    revalidatePath(`/clients/${asset!.client_id}`);
+    revalidateLibrary(asset!.client_id);
     return null;
   });
 }
@@ -282,7 +288,7 @@ export async function registerImageAsset(input: {
       .select("id")
       .single();
     throwIfError({ error }, "No se pudo registrar la imagen");
-    revalidatePath(`/clients/${data.clientId}`);
+    revalidateLibrary(data.clientId);
     return row!.id;
   });
 }
@@ -297,7 +303,7 @@ export async function renameAsset(assetId: string, title: string): Promise<Actio
       .select("client_id")
       .single();
     throwIfError({ error }, "No se pudo renombrar");
-    revalidatePath(`/clients/${data!.client_id}`);
+    revalidateLibrary(data!.client_id);
     return null;
   });
 }
@@ -336,7 +342,7 @@ export async function saveCharacter(input: z.input<typeof characterSchema>): Pro
       ? await db.from("characters").update(row).eq("id", data.id).select("id").single()
       : await db.from("characters").insert(row).select("id").single();
     throwIfError({ error }, "No se pudo guardar el personaje");
-    revalidatePath(`/clients/${data.clientId}`);
+    revalidateLibrary(data.clientId);
     return saved!.id;
   });
 }
@@ -344,6 +350,7 @@ export async function saveCharacter(input: z.input<typeof characterSchema>): Pro
 const locationSchema = z.object({
   id: uuid.optional(),
   clientId: uuid,
+  code: z.string().trim().max(12, "El código es corto, ej. P7"),
   name: z.string().trim().min(1, "Poné un nombre"),
   description: z.string().trim(),
   plateAssetIds: z.array(uuid),
@@ -355,6 +362,7 @@ export async function saveLocation(input: z.input<typeof locationSchema>): Promi
     const db = await createClient();
     const row = {
       client_id: data.clientId,
+      code: data.code || null,
       name: data.name,
       description: data.description || null,
       plate_asset_ids: data.plateAssetIds,
@@ -362,8 +370,9 @@ export async function saveLocation(input: z.input<typeof locationSchema>): Promi
     const { data: saved, error } = data.id
       ? await db.from("locations").update(row).eq("id", data.id).select("id").single()
       : await db.from("locations").insert(row).select("id").single();
+    if (error?.code === "23505") throw new Error(`Ya hay otra locación con el código ${data.code}`);
     throwIfError({ error }, "No se pudo guardar la locación");
-    revalidatePath(`/clients/${data.clientId}`);
+    revalidateLibrary(data.clientId);
     return saved!.id;
   });
 }
@@ -386,7 +395,7 @@ async function softDelete(table: "characters" | "locations", id: string): Promis
       .select("client_id")
       .single();
     throwIfError({ error }, "No se pudo borrar");
-    revalidatePath(`/clients/${data!.client_id}`);
+    revalidateLibrary(data!.client_id);
     return null;
   });
 }

@@ -10,6 +10,7 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
   script: "Guion",
   shotlist: "Shot list",
   frames: "Frames",
+  clips: "Video",
   done: "Terminado",
 };
 
@@ -44,6 +45,7 @@ export const OPERATION_LABEL: Record<string, string> = {
   image_prompt: "Prompts de imagen",
   video_prompt: "Prompts de video",
   generate_frames: "Frames",
+  generate_clips: "Clips de video",
 };
 
 export type ProjectSummary = {
@@ -51,7 +53,7 @@ export type ProjectSummary = {
   client: { id: string; name: string };
   costUsd: number;
   costBreakdown: CostLine[];
-  steps: { sources: StepState; script: StepState; shots: StepState; frames: StepState };
+  steps: { sources: StepState; script: StepState; shots: StepState; frames: StepState; clips: StepState };
   jobs: ProjectJob[];
 };
 
@@ -69,7 +71,7 @@ export async function loadProjectSummary(db: Db, projectId: string): Promise<Pro
     db.from("project_cost_breakdown").select("*").eq("project_id", projectId).order("cost_usd", { ascending: false }),
     db.from("sources").select("id, extracted_text").eq("project_id", projectId).is("deleted_at", null),
     db.from("scripts").select("version, status").eq("project_id", projectId).is("deleted_at", null),
-    db.from("shots").select("status").eq("project_id", projectId).is("deleted_at", null),
+    db.from("shots").select("id, status").eq("project_id", projectId).is("deleted_at", null),
     db
       .from("jobs")
       .select(JOB_COLUMNS)
@@ -84,6 +86,15 @@ export async function loadProjectSummary(db: Db, projectId: string): Promise<Pro
   const shotRows = shots.data ?? [];
   const approvedShots = shotRows.filter((s) => s.status !== "draft").length;
   const framedShots = shotRows.filter((s) => s.status === "frame_selected").length;
+  const { data: approvedClips } = shotRows.length
+    ? await db
+        .from("clips")
+        .select("shot_id")
+        .in("shot_id", shotRows.map((s) => s.id))
+        .eq("selected", true)
+        .is("deleted_at", null)
+    : { data: [] };
+  const clippedShots = new Set((approvedClips ?? []).map((c) => c.shot_id)).size;
   const { clients, ...projectRow } = project;
 
   return {
@@ -119,7 +130,11 @@ export async function loadProjectSummary(db: Db, projectId: string): Promise<Pro
       },
       frames: {
         done: shotRows.length > 0 && framedShots === shotRows.length,
-        label: shotRows.length ? `${framedShots}/${shotRows.length} elegidos` : "—",
+        label: shotRows.length ? `${framedShots}/${shotRows.length} aprobados` : "—",
+      },
+      clips: {
+        done: shotRows.length > 0 && clippedShots === shotRows.length,
+        label: shotRows.length ? `${clippedShots}/${shotRows.length} aprobados` : "—",
       },
     },
     jobs: (jobs.data ?? []) as ProjectJob[],

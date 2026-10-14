@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-const STEP_BY_STATUS = { draft: "sources", script: "script", shotlist: "shots", frames: "frames", done: "frames" } as const;
+const STEP_BY_STATUS = { draft: "sources", script: "script", shotlist: "shots", frames: "frames", clips: "video", done: "video" } as const;
 
 /** Entrar al proyecto lleva a la etapa en la que está. */
 export default async function ProjectPage({ params }: PageProps<"/projects/[id]">) {

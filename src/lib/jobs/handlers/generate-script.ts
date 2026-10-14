@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getTextEngine } from "@/lib/engines/registry";
+import { locationLabel } from "@/lib/library/locations";
 import { activeTextContent, advanceProjectStatus, insertScriptVersion, loadProjectContext } from "@/lib/pipeline/context";
 import { buildScriptPrompt, scriptParamsSchema, scriptStats } from "@/lib/pipeline/script";
 import type { JobHandler } from "../types";
@@ -51,7 +52,7 @@ export const generateScript: JobHandler = async (ctx) => {
     characters: context.characters
       .filter((c) => selected.has(c.id))
       .map((c) => ({ name: c.name, role: c.role, description: c.description })),
-    locations: context.locations.map((l) => ({ name: l.name, description: l.description })),
+    locations: context.locations.map((l) => ({ name: locationLabel(l), description: l.description })),
     previous:
       previous?.data && payload.instructions
         ? { version: previous.data.version, content: previous.data.content, instructions: payload.instructions }

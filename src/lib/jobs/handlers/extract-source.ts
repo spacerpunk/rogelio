@@ -2,23 +2,13 @@ import { z } from "zod";
 import { getTextEngine } from "@/lib/engines/registry";
 import { extractDocx } from "@/lib/ingest/docx";
 import { sourceKind } from "@/lib/ingest/kinds";
+import { PDF_INSTRUCTIONS, PDF_SYSTEM } from "@/lib/ingest/pdf-prompts";
 import { extractPptx, pptxToMarkdown } from "@/lib/ingest/pptx";
 import { downloadBuffer, ensureThumbnail, safeFileName } from "@/lib/storage";
 import type { JobHandler } from "../types";
 
 // El límite de la API es 32 MB por request; en base64 el PDF crece ~33 %.
 const MAX_PDF_BYTES = 24 * 1024 * 1024;
-
-const PDF_SYSTEM =
-  "Transcribís documentos de capacitación para una productora de video. Tu salida es la materia prima con la que después se escribe un guion, así que tiene que ser fiel y completa.";
-
-const PDF_INSTRUCTIONS = `Extraé el contenido completo de este documento en Markdown, en el orden original.
-
-- Usá "## Página N" como encabezado de cada página (o "## Diapositiva N" si es una presentación exportada).
-- Transcribí todo el texto relevante: títulos, viñetas, pasos, advertencias, tablas (como tablas Markdown) y notas importantes. No resumas ni omitas pasos de procedimientos.
-- Describí brevemente entre corchetes las fotos, diagramas e ilustraciones que aportan información. Ejemplo: [Foto: operario con guantes de cuero ajustando una válvula roja].
-- Ignorá encabezados y pies de página repetidos, números de página y logos.
-- Devolvé solo el contenido, sin comentarios antes ni después.`;
 
 export const extractSource: JobHandler = async (ctx) => {
   const { sourceId } = z.object({ sourceId: z.uuid() }).parse(ctx.job.payload);

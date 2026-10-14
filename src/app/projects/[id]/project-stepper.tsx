@@ -11,6 +11,7 @@ const STEPS = [
   { key: "script", label: "Guion", path: "script" },
   { key: "shots", label: "Shot list", path: "shots" },
   { key: "frames", label: "Frames", path: "frames" },
+  { key: "clips", label: "Video", path: "video" },
 ] as const;
 
 export function ProjectStepper({

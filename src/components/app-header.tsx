@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/projects", label: "Proyectos" },
   { href: "/clients", label: "Clientes" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function AppHeader() {

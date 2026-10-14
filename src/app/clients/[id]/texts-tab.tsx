@@ -23,9 +23,9 @@ import { ASSET_KINDS, TEXT_KINDS, kindLabel, type AssetKind } from "@/lib/librar
 import { cn } from "@/lib/utils";
 import { activateAsset, createTextAsset, deactivateAsset, deleteAsset, saveTextVersion } from "../actions";
 
-type Lineage = { lineageId: string; kind: AssetKind; versions: AssetView[]; latest: AssetView; active: AssetView | null };
+export type Lineage = { lineageId: string; kind: AssetKind; versions: AssetView[]; latest: AssetView; active: AssetView | null };
 
-function groupLineages(assets: AssetView[]): Lineage[] {
+export function groupLineages(assets: AssetView[]): Lineage[] {
   const map = new Map<string, AssetView[]>();
   for (const a of assets) {
     if (a.textContent === null) continue;
@@ -91,7 +91,7 @@ export function TextsTab({ clientId, assets }: { clientId: string; assets: Asset
   );
 }
 
-function TextEditor({ lineage }: { lineage: Lineage }) {
+export function TextEditor({ lineage }: { lineage: Lineage }) {
   const [versionId, setVersionId] = useState(lineage.latest.id);
   const version = lineage.versions.find((v) => v.id === versionId) ?? lineage.latest;
   const [title, setTitle] = useState(version.title);

@@ -3,6 +3,7 @@ import { modelName } from "@/lib/engines/model-names";
 import { defaultImageEngineName, listImageEngines } from "@/lib/engines/registry";
 import { shotPromptHash } from "@/lib/pipeline/prompts";
 import { pickReferences } from "@/lib/pipeline/references";
+import { locationLabel } from "@/lib/library/locations";
 import { signImages } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 import { FramesStep, type FrameView, type ShotFramesView } from "./frames-step";
@@ -22,7 +23,8 @@ export default async function FramesPage({ params }: PageProps<"/projects/[id]/f
   const [shots, characters, locations, assets] = await Promise.all([
     db.from("shots").select("*").eq("project_id", id).is("deleted_at", null).order("order_index"),
     db.from("characters").select("id, name, sheet_asset_ids, based_on_real_person, consent_confirmed").eq("client_id", clientId).is("deleted_at", null),
-    db.from("locations").select("id, name, plate_asset_ids").eq("client_id", clientId).is("deleted_at", null),
+    // También las archivadas: un plano viejo puede seguir apuntando a una.
+    db.from("locations").select("id, code, name, plate_asset_ids, deleted_at").eq("client_id", clientId),
     db
       .from("library_assets")
       .select("id, title, kind, storage_path, is_active")
@@ -73,10 +75,9 @@ export default async function FramesPage({ params }: PageProps<"/projects/[id]/f
       voLine: s.vo_line,
       characters: shotCharacters.map((c) => c.name),
       missingConsent: shotCharacters.filter((c) => c.based_on_real_person && !c.consent_confirmed).map((c) => c.name),
-      location: s.location_id ? (locationsById.get(s.location_id)?.name ?? null) : null,
+      location: s.location_id && locationsById.has(s.location_id) ? locationLabel(locationsById.get(s.location_id)!) : null,
       imagePrompt: s.image_prompt,
       imageNegative: s.image_negative,
-      videoPrompt: s.video_prompt,
       promptStale: Boolean(s.image_prompt && s.prompt_inputs_hash && s.prompt_inputs_hash !== shotPromptHash(s)),
       references: (refsByShot.get(s.id) ?? []).flatMap((r) => {
         const img = signedRefs.get(r.storagePath);

@@ -55,7 +55,7 @@ export type ScriptPromptInput = {
 };
 
 // Contrato de formato de la app: el shot list se deriva de estas tomas, así que el formato es fijo.
-const FORMAT_CONTRACT = `FORMATO DE SALIDA DE ESTA APP (obligatorio, tiene prioridad sobre cualquier otro formato de entrega)
+export const FORMAT_CONTRACT = `FORMATO DE SALIDA DE ESTA APP (obligatorio, tiene prioridad sobre cualquier otro formato de entrega)
 Devolvé solo el guion en Markdown, sin comentarios antes ni después, con esta estructura:
 
 # {Título del curso}
@@ -73,7 +73,7 @@ Objetivo de la escena en una línea.
 - **Locución:** {texto de la voz en off, máximo 18 palabras; vacío si la toma es solo visual}
 - **Acción visual:** {qué se ve, como storyboard}
 - **Personajes:** {nombres exactos de la lista, separados por coma, o "ninguno"}
-- **Locación:** {nombre exacto de la lista}
+- **Locación:** {código y nombre exactos de la lista, por ejemplo "P7 · Campamento"}
 - **Texto en pantalla:** {texto corto o "ninguno"}
 - **Objetivo pedagógico:** {qué aprende el alumno}
 - **Emoción:** {emoción buscada}
@@ -91,6 +91,7 @@ Resumen, simulación, evaluación, checklist y certificación si corresponden, e
 Reglas de esta app:
 - No hagas preguntas: si falta un dato, asumilo y anotalo en "Ficha".
 - Usá solo los personajes y las locaciones de las listas, con sus nombres exactos. No inventes personajes nuevos.
+- Cada locación es una plate (fondo de referencia) con código: citala siempre con código y nombre ("P7 · Campamento"). Si una escena necesita un lugar que no está en la lista, usá la locación más parecida y anotá en "Ficha" que hace falta una plate nueva.
 - Toda escena visual va dividida en tomas con el formato de arriba; la suma de las tomas es la duración del video.`;
 
 function list(items: Named[]): string {
@@ -149,14 +150,14 @@ export function buildScriptPrompt(input: ScriptPromptInput): { system: string; u
   return { system, user: parts.filter(Boolean).join("\n\n") };
 }
 
-const ADAPT_RULES = `Adaptás un guion que ya existe al formato de esta app. No escribís un guion nuevo.
+export const ADAPT_RULES = `Adaptás un guion que ya existe al formato de esta app. No escribís un guion nuevo.
 
 Reglas de la adaptación:
 - Conservá el contenido, el orden y el sentido del guion original. No agregues escenas, datos ni mensajes que no estén.
 - La locución es textual: copiala palabra por palabra. Si una línea supera las 18 palabras, repartila en tomas consecutivas sin cambiar ninguna palabra.
 - Acción visual: usá las indicaciones visuales del original; si no hay, describí brevemente lo que se ve según el contexto.
 - Personajes: si un personaje del original corresponde a uno de la lista (mismo nombre o mismo rol), usá el nombre de la lista; si no corresponde a ninguno, poné "ninguno" en la toma y anotalo en "Ficha".
-- Locación: la de la lista que mejor corresponda.
+- Locación: la de la lista que mejor corresponda, con código y nombre ("P7 · Campamento").
 - Segundos por toma: los que indique el original; si no indica, estimalos por la locución (unas 2,5 palabras por segundo, mínimo 3 s).
 - En "Ficha" aclará que es una adaptación de un guion existente y listá los supuestos.
 - Incluí Quiz y Cierre solo si el original los tiene.`;

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { modelName } from "@/lib/engines/model-names";
+import { locationLabel } from "@/lib/library/locations";
 import type { Database } from "@/lib/supabase/database.types";
 import { FRAMING_LABEL, type Framing } from "./shotlist";
 
@@ -24,7 +25,7 @@ export function shotPromptHash(shot: Pick<Shot, "framing" | "action" | "lighting
 }
 
 // Encuadre del shot list → entrada de la SHOT LIBRARY de los system prompts de imagen.
-const SHOT_LIBRARY: Record<Framing, string> = {
+export const SHOT_LIBRARY: Record<Framing, string> = {
   hero: "HERO (full-body, centered, slightly low eye level, 35mm)",
   wide: "ESTABLISHING (wide, character small in the scene, 24mm)",
   medium: "MEDIUM (waist-up, 3/4 angle, 50mm)",
@@ -59,7 +60,7 @@ export type PromptShotInput = {
   referenceLabels: string[];
 };
 
-function shotBrief({ shot, characters, location }: PromptShotInput): string[] {
+export function shotBrief({ shot, characters, location }: PromptShotInput): string[] {
   return [
     `Scene: ${shot.scene_number}${shot.scene_title ? ` — ${shot.scene_title}` : ""}`,
     `Shot type: ${SHOT_LIBRARY[shot.framing]} (${FRAMING_LABEL[shot.framing]})`,
@@ -69,7 +70,7 @@ function shotBrief({ shot, characters, location }: PromptShotInput): string[] {
           .map((c) => `- ${c.name}${c.role ? ` (${c.role})` : ""}: ${c.visual_notes ?? c.description ?? "no descriptor"}`)
           .join("\n")}`
       : "Characters in frame: none (no people unless the action requires hands; then follow the PPE rules)",
-    location ? `Location: ${location.name}: ${location.description ?? ""}` : "Location: choose from the ENVIRONMENT CANON",
+    location ? `Location: ${locationLabel(location)}: ${location.description ?? ""}` : "Location: choose from the ENVIRONMENT CANON",
     shot.lighting ? `Lighting: ${shot.lighting}` : "Lighting: use the default tag",
     shot.on_screen_text ? `On-screen text: "${shot.on_screen_text}" (apply the TEXT rules)` : "On-screen text: none",
     shot.vo_line ? `Voice-over for context only (not spoken on screen): "${shot.vo_line}"` : "",
@@ -92,16 +93,4 @@ export function buildImagePromptInput(input: PromptShotInput): string {
   ]
     .filter((l) => l !== "")
     .join("\n");
-}
-
-/** Input para Claude con el video system prompt del cliente: borrador para la fase 2 (image-to-video). */
-export function buildVideoPromptInput(input: PromptShotInput & { imagePrompt: string }): string {
-  return [
-    "Target model: Veo 3.1 (default), 16:9 unless stated",
-    `Aspect ratio: ${input.aspectRatio}`,
-    `Start frame: the approved still for this shot, generated from this image prompt:\n${input.imagePrompt}`,
-    ...shotBrief(input),
-    `Idea: ${input.shot.action ?? ""}. The voice-over line is narration added in post, not dialogue, unless the action says a character speaks.`,
-    `Clip length: about ${Math.round(Number(input.shot.est_duration_sec ?? 4))} seconds.`,
-  ].join("\n");
 }

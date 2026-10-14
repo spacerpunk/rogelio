@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getTextEngine } from "@/lib/engines/registry";
+import { locationLabel } from "@/lib/library/locations";
 import { insertScriptVersion, loadProjectContext } from "@/lib/pipeline/context";
 import { buildAdaptScriptPrompt, scriptStats } from "@/lib/pipeline/script";
 import type { JobHandler } from "../types";
@@ -26,7 +27,7 @@ export const adaptScript: JobHandler = async (ctx) => {
     projectTitle: context.project.title,
     aspectRatio: context.project.aspect_ratio,
     characters: context.characters.map((c) => ({ name: c.name, role: c.role, description: c.description })),
-    locations: context.locations.map((l) => ({ name: l.name, description: l.description })),
+    locations: context.locations.map((l) => ({ name: locationLabel(l), description: l.description })),
   });
 
   const engine = getTextEngine(context.project.text_engine);

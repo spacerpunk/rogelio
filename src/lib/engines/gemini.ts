@@ -1,8 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { z } from "zod";
 import { roundUsd } from "./pricing";
 import { sniffImageMime, withNegative } from "./image-utils";
 import { withRetry } from "./retry";
+import { mp4DurationSec } from "./video-utils";
 import { parseStructured } from "./structured";
 import {
   EngineError,
@@ -14,6 +18,8 @@ import {
   type TextEngine,
   type TextInputBlock,
   type TextRequest,
+  type VideoEngine,
+  type VideoRequest,
 } from "./types";
 
 // Gemini "Nano Banana" vía la Interactions API (verificada en la documentación oficial al 2026-09-24):
@@ -258,5 +264,118 @@ export class GeminiTextEngine implements TextEngine {
   async structured<T>(opts: TextRequest, schema: z.ZodType<T>) {
     const { text, meta } = await this.run(opts, responseSchema(schema));
     return { data: parseStructured(text, schema, ENGINE, this.label), ...meta };
+  }
+}
+
+// Video con Gemini Omni Flash vía la Interactions API (verificada en la documentación oficial al 2026-10-13):
+// ai.interactions.create({ model, input: [imágenes, texto], response_format: { type: "video", aspect_ratio,
+// resolution, delivery } }) es sincrónico y devuelve el clip en output_video (data en base64, o uri en la Files
+// API si se pide delivery "uri", que exige store=true: acá se pide inline). Formatos 16:9 y 9:16; resolución 360p,
+// 720p (default), 1080p o 4k (reescalados); clips de 3 a 10 s. No tiene campo negativo ni system instruction:
+// el Avoid va al final del prompt. La duración se guía con la línea de tiempo del prompt (no hay parámetro
+// documentado). No admite imágenes con ciertas personas reconocibles.
+
+// USD por millón de tokens: entrada (texto e imagen) y salida de video. ~5.792 tokens por segundo de 720p.
+const VIDEO_PRICES: [prefix: string, input: number, output: number][] = [["gemini-omni", 1.5, 17.5]];
+const VIDEO_TOKENS_PER_SEC_720P = 5_792;
+const FILE_POLL_MS = 3_000;
+const FILE_POLL_TIMEOUT_MS = 5 * 60_000;
+
+function geminiVideoCost(model: string, inputTokens: number, outputTokens: number): number {
+  const price = VIDEO_PRICES.find(([prefix]) => model.startsWith(prefix));
+  if (!price) return 0;
+  return (inputTokens * price[1] + outputTokens * price[2]) / 1_000_000;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export class GeminiVideoEngine implements VideoEngine {
+  readonly name = ENGINE;
+  readonly label = "Gemini Omni";
+  readonly aspectRatios = ["16:9", "9:16"] as const;
+  readonly maxDurationSec = 10;
+  private client: GoogleGenAI;
+
+  constructor(
+    readonly model: string,
+    apiKey: string,
+  ) {
+    this.client = new GoogleGenAI({ apiKey });
+  }
+
+  /** Descarga un video entregado por URI: espera a que el archivo esté ACTIVE y lo baja a un temporal. */
+  private async downloadFromUri(uri: string): Promise<Buffer> {
+    const name = uri.match(/files\/[^/?:]+/)?.[0];
+    if (!name) throw new EngineError("invalid_output", `Gemini devolvió una URI de video inesperada: ${uri}`, ENGINE);
+    const deadline = Date.now() + FILE_POLL_TIMEOUT_MS;
+    for (;;) {
+      const file = await this.client.files.get({ name });
+      if (file.state === "ACTIVE") break;
+      if (file.state === "FAILED") throw new EngineError("unavailable", "Gemini no pudo preparar el archivo del video.", ENGINE);
+      if (Date.now() > deadline) throw new EngineError("unavailable", "Gemini tardó demasiado en preparar el archivo del video.", ENGINE);
+      await sleep(FILE_POLL_MS);
+    }
+    const dir = await mkdtemp(path.join(tmpdir(), "rt-clip-"));
+    const target = path.join(dir, "clip.mp4");
+    try {
+      await this.client.files.download({ file: name, downloadPath: target });
+      return await readFile(target);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  private async once(opts: VideoRequest) {
+    if (!this.aspectRatios.includes(opts.aspectRatio as "16:9" | "9:16")) {
+      throw new EngineError("config", `Gemini Omni solo genera video 16:9 o 9:16 (el proyecto está en ${opts.aspectRatio}).`, ENGINE);
+    }
+    try {
+      const image = (data: Buffer) => ({ type: "image" as const, mime_type: sniffImageMime(data), data: data.toString("base64") });
+      const interaction = await this.client.interactions.create({
+        model: this.model,
+        // El primer frame va primero: el prompt lo nombra como "Image 1"; después, las referencias de identidad.
+        input: [image(opts.firstFrame), ...opts.references.map(image), { type: "text", text: withNegative(opts.prompt, opts.negative) }],
+        // Entrega inline: la entrega por URI exige store=true y el material del cliente no se guarda en Google.
+        response_format: { type: "video", aspect_ratio: opts.aspectRatio, resolution: opts.resolution },
+        store: false,
+      });
+
+      const output = interaction.output_video;
+      if (interaction.status !== "completed" || !(output?.data || output?.uri)) {
+        const reason = [...(interaction.errors ?? []).map((e) => e.message), interaction.output_text].filter(Boolean).join(" · ");
+        throw new EngineError(
+          "content_blocked",
+          `Gemini Omni no devolvió video (${interaction.status})${reason ? `: ${reason}` : ". Probablemente lo bloquearon sus filtros de contenido (por ejemplo, un personaje basado en una persona real)."}`,
+          ENGINE,
+        );
+      }
+      const video = output.data ? Buffer.from(output.data, "base64") : await this.downloadFromUri(output.uri!);
+      const durationSec = mp4DurationSec(video);
+      return {
+        video,
+        mimeType: output.mime_type ?? "video/mp4",
+        durationSec,
+        inputTokens: interaction.usage?.total_input_tokens ?? 0,
+        outputTokens:
+          // Sin uso informado: estimado con la tarifa publicada de 720p para cualquier resolución.
+          interaction.usage?.total_output_tokens ?? Math.round((durationSec ?? opts.durationSec) * VIDEO_TOKENS_PER_SEC_720P),
+      };
+    } catch (error) {
+      throw toEngineError(error, "GEMINI_VIDEO_MODEL");
+    }
+  }
+
+  async generate(opts: VideoRequest) {
+    const started = Date.now();
+    const result = await withRetry(() => this.once(opts), { retries: 3, baseMs: 10_000 });
+    return {
+      video: result.video,
+      mimeType: result.mimeType,
+      durationSec: result.durationSec,
+      model: this.model,
+      usage: { inputTokens: result.inputTokens, outputTokens: result.outputTokens },
+      costUsd: roundUsd(geminiVideoCost(this.model, result.inputTokens, result.outputTokens)),
+      durationMs: Date.now() - started,
+    };
   }
 }

@@ -1,6 +1,8 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import sharp from "sharp";
 import { z } from "zod";
-import type { ImageEngine, ImageRequest, TextEngine, TextRequest } from "./types";
+import type { ImageEngine, ImageRequest, TextEngine, TextRequest, VideoEngine, VideoRequest } from "./types";
 
 // Motores simulados para probar el flujo sin claves ni costo. Se activan con ENGINE_MOCK=1.
 // Devuelven datos plausibles: el guion sigue el contrato de formato y los JSON cumplen el schema.
@@ -112,5 +114,20 @@ export class MockImageEngine implements ImageEngine {
       }),
     );
     return { images, model: this.model, usage: { images: opts.n }, costUsd: 0, durationMs: 1200 };
+  }
+}
+
+export class MockVideoEngine implements VideoEngine {
+  readonly label = "Simulado";
+  readonly model = "mock-video";
+  readonly aspectRatios = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
+  readonly maxDurationSec = 10;
+  constructor(readonly name = "mock") {}
+
+  async generate(opts: VideoRequest) {
+    await delay(2000);
+    // Clip de prueba de 3 s (barras de color), el mismo para todos los planos.
+    const video = await readFile(path.join(process.cwd(), "src", "lib", "engines", "mock-clip.mp4"));
+    return { video, mimeType: "video/mp4", durationSec: 3, model: this.model, usage: { images: 1 + opts.references.length }, costUsd: 0, durationMs: 2000 };
   }
 }

@@ -5,14 +5,25 @@ import { AlertTriangleIcon, Loader2Icon } from "lucide-react";
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useAction } from "@/hooks/use-action";
 import { modelName } from "@/lib/engines/model-names";
 import type { EngineInfo } from "@/lib/engines/registry";
-import { IMAGE_SIZES } from "@/lib/engines/types";
+import { IMAGE_SIZES, VIDEO_RESOLUTIONS } from "@/lib/engines/types";
 import { ASPECT_RATIOS } from "@/lib/projects/data";
 import { setProjectEngines } from "../actions";
 
-type Settings = { text: string; image: string; imageModel: string; imageSize: string; aspectRatio: string };
+type Settings = {
+  text: string;
+  image: string;
+  imageModel: string;
+  imageSize: string;
+  aspectRatio: string;
+  video: string;
+  videoModel: string;
+  videoResolution: string;
+  videoLogo: boolean;
+};
 
 /** "Claude (Anthropic)" → "Claude", para el resumen del encabezado. */
 function shortLabel(engines: EngineInfo[], name: string): string {
@@ -78,16 +89,18 @@ function OptionSelect({
   );
 }
 
-/** Motores del proyecto: texto (PDFs, guion, shot list, prompts) e imagen (motor, modelo, resolución, formato). */
+/** Motores del proyecto: texto (PDFs, guion, shot list, prompts), imagen (motor, modelo, resolución, formato) y video. */
 export function EnginePicker({
   projectId,
   textEngines,
   imageEngines,
+  videoEngines,
   settings: saved,
 }: {
   projectId: string;
   textEngines: EngineInfo[];
   imageEngines: EngineInfo[];
+  videoEngines: EngineInfo[];
   settings: Settings;
 }) {
   const { pending, run } = useAction();
@@ -96,12 +109,17 @@ export function EnginePicker({
   const missing = [
     ...textEngines.filter((e) => e.name === settings.text && !e.configured),
     ...(imageEngine && !imageEngine.configured ? [imageEngine] : []),
+    ...videoEngines.filter((e) => e.name === settings.video && !e.configured),
   ];
   // El modelo guardado puede no estar ya en .env.local: se muestra igual para que se vea qué falta.
   const models = imageEngine?.models.includes(settings.imageModel)
     ? imageEngine.models
     : [...(imageEngine?.models ?? []), settings.imageModel].filter(Boolean);
   const sizeApplies = settings.image === "gemini";
+  const videoEngine = videoEngines.find((e) => e.name === settings.video);
+  const videoModels = videoEngine?.models.includes(settings.videoModel)
+    ? videoEngine.models
+    : [...(videoEngine?.models ?? []), settings.videoModel].filter(Boolean);
 
   function save(next: Partial<Settings>, input: Omit<Parameters<typeof setProjectEngines>[0], "projectId">, success: string) {
     run(
@@ -131,7 +149,7 @@ export function EnginePicker({
           </div>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96">
+      <PopoverContent align="end" className="max-h-[calc(100svh-5rem)] w-96 overflow-y-auto">
         <FieldGroup className="gap-4">
           <Field>
             <FieldLabel htmlFor="engine-text">Texto</FieldLabel>
@@ -198,6 +216,62 @@ export function EnginePicker({
             {sizeApplies
               ? "Más resolución, más costo por imagen. Aplica a los frames que se generen de acá en adelante."
               : "OpenAI usa un tamaño fijo por formato. Aplica a los frames que se generen de acá en adelante."}
+          </FieldDescription>
+          <FieldSeparator />
+          <Field>
+            <FieldLabel htmlFor="engine-video">Video</FieldLabel>
+            <EngineSelect
+              id="engine-video"
+              engines={videoEngines}
+              value={settings.video}
+              disabled={pending}
+              onChange={(name) =>
+                save(
+                  { video: name, videoModel: videoEngines.find((e) => e.name === name)?.model ?? "" },
+                  { videoEngine: name },
+                  `Motor de video: ${shortLabel(videoEngines, name)}`,
+                )
+              }
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field>
+              <FieldLabel htmlFor="video-model">Modelo</FieldLabel>
+              <OptionSelect
+                id="video-model"
+                value={settings.videoModel}
+                options={videoModels.map((m) => ({ value: m, label: m }))}
+                disabled={pending || !videoEngine?.configured}
+                onChange={(model) => save({ videoModel: model }, { videoModel: model }, `Modelo de video: ${model}`)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="video-resolution">Resolución</FieldLabel>
+              <OptionSelect
+                id="video-resolution"
+                value={settings.videoResolution}
+                options={VIDEO_RESOLUTIONS.map((r) => ({ value: r, label: r === "1080p" || r === "4k" ? `${r} (reescalado)` : r }))}
+                disabled={pending}
+                onChange={(resolution) =>
+                  save({ videoResolution: resolution }, { videoResolution: resolution }, `Resolución de video: ${resolution}`)
+                }
+              />
+            </Field>
+          </div>
+          <Field orientation="horizontal">
+            <Switch
+              id="video-logo"
+              checked={settings.videoLogo}
+              disabled={pending}
+              onCheckedChange={(on) => save({ videoLogo: on }, { videoLogo: on }, on ? "Uniforme con logo" : "Uniforme sin logo")}
+            />
+            <FieldLabel htmlFor="video-logo" className="font-normal">
+              El uniforme lleva el logo del cliente
+            </FieldLabel>
+          </Field>
+          <FieldDescription>
+            Modo logo del system prompt de video: con logo, el parche del pecho queda igual al del frame; sin logo, el pecho
+            queda liso.
           </FieldDescription>
           {missing.length > 0 && (
             <p className="flex gap-1.5 text-xs text-amber-600 dark:text-amber-400">

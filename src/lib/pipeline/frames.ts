@@ -5,7 +5,7 @@ import type { Db, JobContext } from "@/lib/jobs/types";
 import { ensureThumbnail } from "@/lib/storage";
 import type { Database } from "@/lib/supabase/database.types";
 import { activeTextContent } from "./context";
-import { buildImagePromptInput, buildVideoPromptInput, imagePromptSchema, shotPromptHash, type PromptShotInput } from "./prompts";
+import { buildImagePromptInput, imagePromptSchema, shotPromptHash, type PromptShotInput } from "./prompts";
 import { loadReferenceBuffers, resolveShotReferences, type ReferenceAsset } from "./references";
 
 type Tables = Database["public"]["Tables"];
@@ -63,13 +63,12 @@ export function assertConsent(ctx: ShotContext) {
   }
 }
 
-/** El motor de texto del proyecto escribe image_prompt e image_negative (image system prompt) y un borrador de video_prompt. */
+/** El motor de texto del proyecto escribe image_prompt e image_negative con el image system prompt del cliente. */
 export async function generatePromptsForShot(job: JobContext, ctx: ShotContext, engineName: string): Promise<void> {
   const { db } = job;
   const clientId = ctx.project.client_id;
-  const [imageSystem, videoSystem, clientNegative] = await Promise.all([
+  const [imageSystem, clientNegative] = await Promise.all([
     activeTextContent(db, clientId, "image_system_prompt"),
-    activeTextContent(db, clientId, "video_system_prompt"),
     activeTextContent(db, clientId, "negative_prompt"),
   ]);
   if (!imageSystem) throw new Error("El cliente no tiene un system prompt de imagen activo (biblioteca → Textos).");
@@ -94,26 +93,11 @@ export async function generatePromptsForShot(job: JobContext, ctx: ShotContext, 
     ),
   );
 
-  let videoPrompt: string | null = ctx.shot.video_prompt;
-  if (videoSystem) {
-    const video = await job.track(text, "video_prompt", () =>
-      text.complete({
-        system: videoSystem,
-        content: buildVideoPromptInput({ ...input, imagePrompt: image.data.final_prompt }),
-        maxTokens: 16_000,
-        effort: "low",
-        cacheSystem: true,
-      }),
-    );
-    videoPrompt = video.text;
-  }
-
   const { error } = await db
     .from("shots")
     .update({
       image_prompt: image.data.final_prompt.trim(),
       image_negative: image.data.negative.trim() || clientNegative,
-      video_prompt: videoPrompt,
       prompt_inputs_hash: shotPromptHash(ctx.shot),
       prompts_generated_at: new Date().toISOString(),
     })

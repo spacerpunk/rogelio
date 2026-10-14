@@ -10,10 +10,11 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
 import type { AssetView, LocationView } from "@/lib/library/data";
+import { locationLabel } from "@/lib/library/locations";
 import { deleteLocation, saveLocation } from "../actions";
 import { AssetPicker } from "./asset-picker";
 
-const EMPTY: LocationView = { id: "", name: "", description: null, plateAssetIds: [] };
+const EMPTY: LocationView = { id: "", code: null, name: "", description: null, plateAssetIds: [] };
 
 export function LocationsTab({
   clientId,
@@ -31,7 +32,8 @@ export function LocationsTab({
     <div className="p-6">
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          La descripción y las plates de la locación se adjuntan solas a los planos que ocurren ahí.
+          Cada locación es una plate con código (P1, P7…): el guion la cita así y sus plates se adjuntan solas a los planos
+          que ocurren ahí.
         </p>
         <Button size="sm" onClick={() => setEditing(EMPTY)}>
           <PlusIcon />
@@ -60,7 +62,13 @@ export function LocationsTab({
                 )}
               </div>
               <div className="space-y-1 p-3">
-                <span className="font-medium">{l.name}</span>
+                <div className="flex items-baseline gap-1.5">
+                  {l.code && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{l.code}</span>}
+                  <span className="min-w-0 flex-1 truncate font-medium">{l.name}</span>
+                  {l.plateAssetIds.length > 1 && (
+                    <span className="shrink-0 text-xs text-muted-foreground">{l.plateAssetIds.length} plates</span>
+                  )}
+                </div>
                 <p className="line-clamp-2 text-xs text-muted-foreground">{l.description ?? "Sin descripción"}</p>
               </div>
             </button>
@@ -101,15 +109,30 @@ function LocationEditor({
   return (
     <>
       <SheetHeader>
-        <SheetTitle>{location.id ? location.name : "Nueva locación"}</SheetTitle>
+        <SheetTitle>{location.id ? locationLabel(location) : "Nueva locación"}</SheetTitle>
         <SheetDescription>Se usa en el shot list y como referencia en los frames.</SheetDescription>
       </SheetHeader>
       <div className="flex-1 overflow-y-auto px-4">
         <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="l-name">Nombre</FieldLabel>
-            <Input id="l-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </Field>
+          <div className="grid grid-cols-[7rem_1fr] gap-3">
+            <Field>
+              <FieldLabel htmlFor="l-code">Código</FieldLabel>
+              <Input
+                id="l-code"
+                value={form.code ?? ""}
+                placeholder="P7"
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                className="font-mono"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="l-name">Nombre</FieldLabel>
+              <Input id="l-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </Field>
+          </div>
+          <FieldDescription className="-mt-3">
+            El guion cita la locación como &ldquo;{locationLabel({ code: form.code, name: form.name || "Nombre" })}&rdquo;.
+          </FieldDescription>
           <Field>
             <FieldLabel htmlFor="l-desc">Descripción visual</FieldLabel>
             <FieldDescription>En inglés, lista para el prompt de imagen.</FieldDescription>
@@ -123,6 +146,9 @@ function LocationEditor({
           </Field>
           <Field>
             <FieldLabel>Location plates</FieldLabel>
+            <FieldDescription>
+              Variantes de la misma locación (de día, de noche, otro ángulo): se adjuntan todas como referencia.
+            </FieldDescription>
             <AssetPicker
               clientId={clientId}
               kind="location_plate"
@@ -159,6 +185,7 @@ function LocationEditor({
                 saveLocation({
                   id: form.id || undefined,
                   clientId,
+                  code: form.code ?? "",
                   name: form.name,
                   description: form.description ?? "",
                   plateAssetIds: form.plateAssetIds,

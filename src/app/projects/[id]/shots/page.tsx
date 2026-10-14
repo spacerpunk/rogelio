@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { compareLocations, locationLabel } from "@/lib/library/locations";
 import { createClient } from "@/lib/supabase/server";
 import { ShotsStep, type ShotView } from "./shots-step";
 
@@ -11,10 +12,17 @@ export default async function ShotsPage({ params }: PageProps<"/projects/[id]/sh
   const [shots, characters, locations, script] = await Promise.all([
     db.from("shots").select("*").eq("project_id", id).is("deleted_at", null).order("order_index"),
     db.from("characters").select("id, name").eq("client_id", project!.client_id).is("deleted_at", null).order("name"),
-    db.from("locations").select("id, name").eq("client_id", project!.client_id).is("deleted_at", null).order("name"),
+    // También las archivadas: un plano viejo puede seguir apuntando a una.
+    db.from("locations").select("id, code, name, deleted_at").eq("client_id", project!.client_id),
     db.from("scripts").select("version").eq("project_id", id).eq("status", "approved").maybeSingle(),
   ]);
   if (shots.error) throw new Error(`No se pudo cargar el shot list: ${shots.error.message}`);
+
+  const usedLocations = new Set(shots.data.map((s) => s.location_id));
+  const locationOptions = (locations.data ?? [])
+    .filter((l) => !l.deleted_at || usedLocations.has(l.id))
+    .sort((a, b) => Number(Boolean(a.deleted_at)) - Number(Boolean(b.deleted_at)) || compareLocations(a, b))
+    .map((l) => ({ id: l.id, name: `${locationLabel(l)}${l.deleted_at ? " (archivada)" : ""}` }));
 
   const views: ShotView[] = shots.data.map((s) => ({
     id: s.id,
@@ -40,7 +48,7 @@ export default async function ShotsPage({ params }: PageProps<"/projects/[id]/sh
       projectId={id}
       shots={views}
       characters={characters.data ?? []}
-      locations={locations.data ?? []}
+      locations={locationOptions}
       approvedScriptVersion={script.data?.version ?? null}
       targetSec={project?.target_duration_sec ?? null}
     />

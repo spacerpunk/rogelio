@@ -1,8 +1,8 @@
 import { ClaudeTextEngine } from "./claude";
-import { GeminiImageEngine, GeminiTextEngine } from "./gemini";
-import { MockImageEngine, MockTextEngine } from "./mock";
+import { GeminiImageEngine, GeminiTextEngine, GeminiVideoEngine } from "./gemini";
+import { MockImageEngine, MockTextEngine, MockVideoEngine } from "./mock";
 import { OpenAIImageEngine, OpenAITextEngine } from "./openai";
-import { EngineError, type ImageEngine, type TextEngine } from "./types";
+import { EngineError, type ImageEngine, type TextEngine, type VideoEngine } from "./types";
 
 // Registro central de motores. Los nombres de modelo salen siempre de variables de entorno: cada una
 // admite una lista separada por comas (los modelos que se pueden elegir en la UI); el primero es el default.
@@ -55,9 +55,12 @@ function preferConfigured(engines: EngineInfo[], preferred: string): string {
 }
 
 /** Para las acciones de la UI: el motor existe y tiene clave y modelo (o está activo el modo simulado). */
-export function assertEngineReady(kind: "text" | "image", name: string): void {
-  const engine = (kind === "text" ? listTextEngines() : listImageEngines()).find((e) => e.name === name);
-  if (!engine) throw new Error(`No existe el motor de ${kind === "text" ? "texto" : "imagen"} "${name}".`);
+const KIND_LABEL = { text: "texto", image: "imagen", video: "video" } as const;
+
+export function assertEngineReady(kind: "text" | "image" | "video", name: string): void {
+  const list = kind === "text" ? listTextEngines() : kind === "image" ? listImageEngines() : listVideoEngines();
+  const engine = list.find((e) => e.name === name);
+  if (!engine) throw new Error(`No existe el motor de ${KIND_LABEL[kind]} "${name}".`);
   if (!engine.configured) throw new Error(`${engine.label} no está configurado: completá su API key y modelo en .env.local.`);
 }
 
@@ -150,6 +153,38 @@ export function getImageEngine(name: string, model: string | null = null): Image
 /** Para las acciones de la UI: el modelo está habilitado para ese motor de imagen. */
 export function assertImageModelReady(engineName: string, model: string): void {
   const engine = listImageEngines().find((e) => e.name === engineName);
+  if (!engine?.models.includes(model)) {
+    throw new Error(`El modelo "${model}" no está habilitado para ${engine?.label ?? engineName}: agregalo en .env.local.`);
+  }
+}
+
+const VIDEO_ENGINES: Record<string, EngineEntry<VideoEngine>> = {
+  gemini: {
+    label: "Gemini Omni",
+    keyVar: "GEMINI_API_KEY",
+    modelVar: "GEMINI_VIDEO_MODEL",
+    create: (apiKey, model) => new GeminiVideoEngine(model, apiKey),
+  },
+};
+
+export function listVideoEngines(): EngineInfo[] {
+  return listEngines(VIDEO_ENGINES, "mock-video");
+}
+
+/** Motor de video de los proyectos que no eligieron uno. */
+export function defaultVideoEngineName(): string {
+  return preferConfigured(listVideoEngines(), env("DEFAULT_VIDEO_ENGINE") ?? "gemini");
+}
+
+/** model null = el modelo por defecto del motor (el primero de su lista en .env.local). */
+export function getVideoEngine(name: string, model: string | null = null): VideoEngine {
+  if (mockEnginesEnabled()) return new MockVideoEngine(name);
+  return createEngine(VIDEO_ENGINES, "video", name, model);
+}
+
+/** Para las acciones de la UI: el modelo está habilitado para ese motor de video. */
+export function assertVideoModelReady(engineName: string, model: string): void {
+  const engine = listVideoEngines().find((e) => e.name === engineName);
   if (!engine?.models.includes(model)) {
     throw new Error(`El modelo "${model}" no está habilitado para ${engine?.label ?? engineName}: agregalo en .env.local.`);
   }

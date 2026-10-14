@@ -119,39 +119,69 @@ export type Database = {
       }
       clips: {
         Row: {
+          aspect_ratio: string | null
+          cost_usd: number
           created_at: string
           deleted_at: string | null
           duration_sec: number | null
           engine: string | null
           frame_id: string | null
           id: string
+          job_id: string | null
+          model: string | null
+          negative_used: string | null
+          prompt_used: string | null
+          rejected: boolean
+          resolution: string | null
+          review_notes: string | null
           selected: boolean
           shot_id: string
           updated_at: string
+          variant_index: number
           video_path: string | null
         }
         Insert: {
+          aspect_ratio?: string | null
+          cost_usd?: number
           created_at?: string
           deleted_at?: string | null
           duration_sec?: number | null
           engine?: string | null
           frame_id?: string | null
           id?: string
+          job_id?: string | null
+          model?: string | null
+          negative_used?: string | null
+          prompt_used?: string | null
+          rejected?: boolean
+          resolution?: string | null
+          review_notes?: string | null
           selected?: boolean
           shot_id: string
           updated_at?: string
+          variant_index?: number
           video_path?: string | null
         }
         Update: {
+          aspect_ratio?: string | null
+          cost_usd?: number
           created_at?: string
           deleted_at?: string | null
           duration_sec?: number | null
           engine?: string | null
           frame_id?: string | null
           id?: string
+          job_id?: string | null
+          model?: string | null
+          negative_used?: string | null
+          prompt_used?: string | null
+          rejected?: boolean
+          resolution?: string | null
+          review_notes?: string | null
           selected?: boolean
           shot_id?: string
           updated_at?: string
+          variant_index?: number
           video_path?: string | null
         }
         Relationships: [
@@ -160,6 +190,13 @@ export type Database = {
             columns: ["frame_id"]
             isOneToOne: false
             referencedRelation: "frames"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clips_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
           {
@@ -466,6 +503,7 @@ export type Database = {
       locations: {
         Row: {
           client_id: string
+          code: string | null
           created_at: string
           deleted_at: string | null
           description: string | null
@@ -476,6 +514,7 @@ export type Database = {
         }
         Insert: {
           client_id: string
+          code?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
@@ -486,6 +525,7 @@ export type Database = {
         }
         Update: {
           client_id?: string
+          code?: string | null
           created_at?: string
           deleted_at?: string | null
           description?: string | null
@@ -520,6 +560,10 @@ export type Database = {
           text_engine: string | null
           title: string
           updated_at: string
+          video_engine: string | null
+          video_logo: boolean
+          video_model: string | null
+          video_resolution: string
         }
         Insert: {
           aspect_ratio?: string
@@ -536,6 +580,10 @@ export type Database = {
           text_engine?: string | null
           title: string
           updated_at?: string
+          video_engine?: string | null
+          video_logo?: boolean
+          video_model?: string | null
+          video_resolution?: string
         }
         Update: {
           aspect_ratio?: string
@@ -552,6 +600,10 @@ export type Database = {
           text_engine?: string | null
           title?: string
           updated_at?: string
+          video_engine?: string | null
+          video_logo?: boolean
+          video_model?: string | null
+          video_resolution?: string
         }
         Relationships: [
           {
@@ -641,7 +693,12 @@ export type Database = {
           script_version: number
           status: Database["public"]["Enums"]["shot_status"]
           updated_at: string
+          video_duration_sec: number | null
+          video_negative: string | null
           video_prompt: string | null
+          video_prompt_frame_id: string | null
+          video_prompt_generated_at: string | null
+          video_qa_notes: string | null
           vo_line: string | null
         }
         Insert: {
@@ -667,7 +724,12 @@ export type Database = {
           script_version: number
           status?: Database["public"]["Enums"]["shot_status"]
           updated_at?: string
+          video_duration_sec?: number | null
+          video_negative?: string | null
           video_prompt?: string | null
+          video_prompt_frame_id?: string | null
+          video_prompt_generated_at?: string | null
+          video_qa_notes?: string | null
           vo_line?: string | null
         }
         Update: {
@@ -693,7 +755,12 @@ export type Database = {
           script_version?: number
           status?: Database["public"]["Enums"]["shot_status"]
           updated_at?: string
+          video_duration_sec?: number | null
+          video_negative?: string | null
           video_prompt?: string | null
+          video_prompt_frame_id?: string | null
+          video_prompt_generated_at?: string | null
+          video_qa_notes?: string | null
           vo_line?: string | null
         }
         Relationships: [
@@ -716,6 +783,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shots_video_prompt_frame_id_fkey"
+            columns: ["video_prompt_frame_id"]
+            isOneToOne: false
+            referencedRelation: "frames"
             referencedColumns: ["id"]
           },
         ]
@@ -962,7 +1036,15 @@ export type Database = {
         | "generate_frames"
         | "import_script"
         | "adapt_script"
-      project_status: "draft" | "script" | "shotlist" | "frames" | "done"
+        | "generate_video_prompts"
+        | "generate_clips"
+      project_status:
+        | "draft"
+        | "script"
+        | "shotlist"
+        | "frames"
+        | "clips"
+        | "done"
       script_status: "draft" | "approved"
       shot_framing: "hero" | "wide" | "medium" | "closeup" | "insert" | "group"
       shot_status: "draft" | "approved" | "frame_selected"
@@ -1117,8 +1199,17 @@ export const Constants = {
         "generate_frames",
         "import_script",
         "adapt_script",
+        "generate_video_prompts",
+        "generate_clips",
       ],
-      project_status: ["draft", "script", "shotlist", "frames", "done"],
+      project_status: [
+        "draft",
+        "script",
+        "shotlist",
+        "frames",
+        "clips",
+        "done",
+      ],
       script_status: ["draft", "approved"],
       shot_framing: ["hero", "wide", "medium", "closeup", "insert", "group"],
       shot_status: ["draft", "approved", "frame_selected"],

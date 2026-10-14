@@ -13,6 +13,8 @@ const JOB_LABEL: Record<ProjectJob["type"], string> = {
   generate_shotlist: "Generación de shot list",
   generate_prompts: "Generación de prompts",
   generate_frames: "Generación de frames",
+  generate_video_prompts: "Generación de prompts de video",
+  generate_clips: "Generación de clips",
 };
 
 export function jobLabel(type: ProjectJob["type"]) {

@@ -21,7 +21,13 @@ type SeedCharacter = {
   description: string;
   visual_notes: string;
 };
-type SeedLocation = { name: string; description: string };
+type SeedLocation = {
+  code?: string;
+  name: string;
+  description: string;
+  plates: { file: string; title: string }[];
+};
+type SeedLocations = { locations: SeedLocation[]; archive: string[] };
 
 const db = createAdminClient();
 
@@ -128,6 +134,12 @@ async function seedTexts(clientId: string) {
   await seedTextLineage(clientId, "video_system_prompt", [
     { title: "Video system prompt Roger That", content: codeBlock(section(generic, "## 2.")), active: true },
   ]);
+  await ensureActiveVersion(
+    clientId,
+    "video_system_prompt",
+    "Video system prompt v3 (Seedance 2.5 · Gemini Omni)",
+    codeBlock(read("roger-that-video-system-prompt-v3.md")),
+  );
   await seedTextLineage(clientId, "negative_prompt", [
     {
       title: "Negativo estándar Clear Petroleum",
@@ -138,6 +150,34 @@ async function seedTexts(clientId: string) {
   // reference_other admite varios textos e imágenes: se chequea por título.
   await ensureReferenceText(clientId, "Checklists de QA (imagen y video)", section(generic, "## 3."));
   await ensureReferenceText(clientId, "Calibración y pipeline Clear", section(clear, "## C."));
+}
+
+/**
+ * Suma una versión nueva (por título) al linaje del tipo y la deja en uso. Si ya existe, no se toca:
+ * así no se pisa una versión que el usuario haya activado o editado después.
+ */
+async function ensureActiveVersion(clientId: string, kind: AssetKind, title: string, content: string) {
+  const { data: rows } = await db
+    .from("library_assets")
+    .select("id, title, lineage_id, version, is_active")
+    .eq("client_id", clientId)
+    .eq("kind", kind)
+    .is("deleted_at", null)
+    .order("version", { ascending: false });
+  if ((rows ?? []).some((r) => r.title === title)) {
+    console.log(`· ${kind}: "${title}" ya existe`);
+    return;
+  }
+  const base = rows?.find((r) => r.is_active) ?? rows?.[0];
+  const lineageId = base?.lineage_id ?? crypto.randomUUID();
+  const version = Math.max(0, ...(rows ?? []).filter((r) => r.lineage_id === lineageId).map((r) => r.version)) + 1;
+  const { error: offError } = await db.from("library_assets").update({ is_active: false }).eq("client_id", clientId).eq("kind", kind);
+  if (offError) throw offError;
+  const { error } = await db
+    .from("library_assets")
+    .insert({ client_id: clientId, kind, title, text_content: content, lineage_id: lineageId, version, is_active: true });
+  if (error) throw error;
+  console.log(`+ ${kind}: v${version} "${title}" (activa)`);
 }
 
 async function ensureReferenceText(clientId: string, title: string, content: string) {
@@ -157,8 +197,8 @@ async function ensureReferenceText(clientId: string, title: string, content: str
   console.log(`+ reference_other: ${title}`);
 }
 
-async function uploadSheet(clientId: string, file: string, title: string): Promise<string> {
-  const storagePath = `${clientId}/character_sheet/seed-${safeFileName(file)}`;
+async function uploadImage(clientId: string, kind: AssetKind, folder: string, file: string, title: string): Promise<string> {
+  const storagePath = `${clientId}/${kind}/seed-${safeFileName(file)}`;
   const { data: existing } = await db
     .from("library_assets")
     .select("id")
@@ -168,10 +208,9 @@ async function uploadSheet(clientId: string, file: string, title: string): Promi
     .maybeSingle();
   if (existing) return existing.id;
 
-  const image = readFileSync(path.join(SEED_DIR, "Character Sheets", file));
-  const { error: uploadError } = await db.storage
-    .from("library")
-    .upload(storagePath, image, { contentType: "image/png", upsert: true });
+  const image = readFileSync(path.join(SEED_DIR, folder, file));
+  const mimeType = file.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+  const { error: uploadError } = await db.storage.from("library").upload(storagePath, image, { contentType: mimeType, upsert: true });
   if (uploadError) throw new Error(`Subiendo ${file}: ${uploadError.message}`);
   await ensureThumbnail(db, "library", storagePath, image);
 
@@ -179,10 +218,10 @@ async function uploadSheet(clientId: string, file: string, title: string): Promi
     .from("library_assets")
     .insert({
       client_id: clientId,
-      kind: "character_sheet",
-      title: `Sheet ${title}`,
+      kind,
+      title,
       storage_path: storagePath,
-      mime_type: "image/png",
+      mime_type: mimeType,
     })
     .select("id")
     .single();
@@ -205,7 +244,9 @@ async function seedCharacters(clientId: string) {
       continue;
     }
     const sheetIds: string[] = [];
-    for (const sheet of character.sheets) sheetIds.push(await uploadSheet(clientId, sheet.file, sheet.title));
+    for (const sheet of character.sheets) {
+      sheetIds.push(await uploadImage(clientId, "character_sheet", "Character Sheets", sheet.file, `Sheet ${sheet.title}`));
+    }
 
     const { error } = await db.from("characters").insert({
       client_id: clientId,
@@ -222,23 +263,51 @@ async function seedCharacters(clientId: string) {
   }
 }
 
+/**
+ * Locaciones con plates (P1, P2…). Una locación existente (por código o por nombre) solo recibe código y plates
+ * si todavía no tiene plates. Las de solo texto listadas en "archive" se archivan (borrado lógico): las reemplazan
+ * las que tienen plate.
+ */
 async function seedLocations(clientId: string) {
-  const locations = JSON.parse(read("locaciones.json")) as SeedLocation[];
+  const { locations, archive } = JSON.parse(read("locaciones.json")) as SeedLocations;
+  const { data: existingRows } = await db
+    .from("locations")
+    .select("id, code, name, plate_asset_ids")
+    .eq("client_id", clientId)
+    .is("deleted_at", null);
+  const existing = existingRows ?? [];
+
   for (const location of locations) {
-    const { data: existing } = await db
-      .from("locations")
-      .select("id")
-      .eq("client_id", clientId)
-      .eq("name", location.name)
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (existing) {
-      console.log(`· Locación ${location.name} ya existe`);
+    const match = existing.find(
+      (l) => (location.code && l.code?.toLowerCase() === location.code.toLowerCase()) || l.name === location.name,
+    );
+    if (match?.plate_asset_ids.length || (match && location.plates.length === 0)) {
+      console.log(`· Locación ${location.code ?? location.name} ya existe`);
       continue;
     }
-    const { error } = await db.from("locations").insert({ client_id: clientId, ...location });
+    const plateIds: string[] = [];
+    for (const plate of location.plates) {
+      plateIds.push(await uploadImage(clientId, "location_plate", "Locaciones", plate.file, plate.title));
+    }
+    const row = {
+      code: location.code ?? null,
+      name: location.name,
+      description: location.description,
+      plate_asset_ids: plateIds,
+    };
+    const { error } = match
+      ? await db.from("locations").update(row).eq("id", match.id)
+      : await db.from("locations").insert({ client_id: clientId, ...row });
     if (error) throw error;
-    console.log(`+ Locación ${location.name}`);
+    console.log(`${match ? "~" : "+"} Locación ${location.code ? `${location.code} · ` : ""}${location.name} (${plateIds.length} plate${plateIds.length === 1 ? "" : "s"})`);
+  }
+
+  for (const name of archive) {
+    const old = existing.find((l) => l.name === name && !l.code && l.plate_asset_ids.length === 0);
+    if (!old) continue;
+    const { error } = await db.from("locations").update({ deleted_at: new Date().toISOString() }).eq("id", old.id);
+    if (error) throw error;
+    console.log(`- Locación ${name} archivada (la reemplazan las que tienen plate)`);
   }
 }
 

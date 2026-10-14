@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { signImages, type SignedImage } from "@/lib/storage";
 import type { AssetKind } from "./kinds";
+import { compareLocations } from "./locations";
 
 type Db = SupabaseClient<Database>;
 type AssetRow = Database["public"]["Tables"]["library_assets"]["Row"];
@@ -33,6 +34,7 @@ export type CharacterView = {
 
 export type LocationView = {
   id: string;
+  code: string | null;
   name: string;
   description: string | null;
   plateAssetIds: string[];
@@ -93,8 +95,9 @@ export async function loadClientLibrary(db: Db, clientId: string): Promise<Clien
       basedOnRealPerson: c.based_on_real_person,
       consentConfirmed: c.consent_confirmed,
     })),
-    locations: (locations.data ?? []).map((l) => ({
+    locations: (locations.data ?? []).sort(compareLocations).map((l) => ({
       id: l.id,
+      code: l.code,
       name: l.name,
       description: l.description,
       plateAssetIds: l.plate_asset_ids,

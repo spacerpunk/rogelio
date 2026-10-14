@@ -1,4 +1,5 @@
 import { getActiveText } from "@/lib/library/data";
+import { compareLocations } from "@/lib/library/locations";
 import type { Db } from "@/lib/jobs/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
@@ -29,7 +30,7 @@ export async function loadProjectContext(db: Db, projectId: string): Promise<Pro
     project: row,
     clientName: clients?.name ?? "",
     characters: characters.data ?? [],
-    locations: locations.data ?? [],
+    locations: (locations.data ?? []).sort(compareLocations),
   };
 }
 
@@ -54,7 +55,7 @@ export async function insertScriptVersion(db: Db, projectId: string, content: st
 
 /** Avanza el estado del proyecto sin retroceder nunca. */
 export async function advanceProjectStatus(db: Db, projectId: string, to: Tables["projects"]["Row"]["status"]) {
-  const order = ["draft", "script", "shotlist", "frames", "done"] as const;
+  const order = ["draft", "script", "shotlist", "frames", "clips", "done"] as const;
   const { data } = await db.from("projects").select("status").eq("id", projectId).single();
   if (data && order.indexOf(data.status) < order.indexOf(to)) {
     await db.from("projects").update({ status: to }).eq("id", projectId);

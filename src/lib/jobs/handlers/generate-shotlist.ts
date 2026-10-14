@@ -1,4 +1,5 @@
 import { getTextEngine } from "@/lib/engines/registry";
+import { locationLabel } from "@/lib/library/locations";
 import { activeTextContent, loadProjectContext } from "@/lib/pipeline/context";
 import { SHOTLIST_SYSTEM, buildShotlistPrompt, estimateDuration, shotlistOutputSchema } from "@/lib/pipeline/shotlist";
 import type { JobHandler } from "../types";
@@ -28,7 +29,7 @@ export const generateShotlist: JobHandler = async (ctx) => {
           script: script.content,
           styleBible,
           characters: context.characters.map((c) => ({ id: c.id, name: c.name, role: c.role, description: c.description })),
-          locations: context.locations.map((l) => ({ id: l.id, name: l.name, description: l.description })),
+          locations: context.locations.map((l) => ({ id: l.id, name: locationLabel(l), description: l.description })),
         }),
         maxTokens: 64_000,
         effort: "medium",

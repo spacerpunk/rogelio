@@ -49,7 +49,7 @@ Reglas:
 - vo_line: la locución de la toma, textual, sin reescribirla. Cadena vacía si la toma no tiene locución.
 - action: qué se ve, en español, concreto y filmable: quién, qué hace, con qué manos, hacia dónde mira, qué equipo aparece. Una sola acción clara.
 - character_ids: los ids de los personajes que aparecen en cuadro, tomados de la lista. Lista vacía si no aparece nadie. Nunca inventes ids.
-- location_id: el id de la locación de la lista que mejor corresponde; null si ninguna aplica.
+- location_id: el id de la locación que cita la toma. El guion la nombra con código y nombre ("P7 · Campamento"): buscá ese código en la lista. Si la toma no la cita, elegí la que mejor corresponde; null si ninguna aplica.
 - framing según el tipo de plano: plano general, drone o establishing → wide; plano entero o héroe de cuerpo completo → hero; plano medio, travelling, steadicam o walk-and-talk → medium; primer plano → closeup; plano detalle, macro o inserto de manos, pantallas o instrumentos → insert; tres o más personajes juntos en cuadro → group. Un POV se resuelve como insert o medium según lo que se vea.
 - lighting: breve y coherente con la style bible (por ejemplo "mediodía, sol duro, cielo azul profundo", "hora dorada, luz rasante cálida", "interior, luz cálida de ventana y fluorescente").
 - on_screen_text: el texto en pantalla de la toma, o cadena vacía.

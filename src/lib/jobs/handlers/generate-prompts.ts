@@ -9,7 +9,7 @@ const payloadSchema = z.object({
   engine: z.string().optional(),
 });
 
-/** Prompts de imagen (y borrador de video) para uno o varios planos. */
+/** Prompts de imagen para uno o varios planos. */
 export const generatePrompts: JobHandler = async (ctx) => {
   const { shotIds, engine = defaultImageEngineName() } = payloadSchema.parse(ctx.job.payload);
   let done = 0;

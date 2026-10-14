@@ -95,3 +95,18 @@ export async function signUrl(db: Db, bucket: Bucket, path: string): Promise<str
   const { data } = await db.storage.from(bucket).createSignedUrl(path, SIGNED_URL_TTL_SEC);
   return data?.signedUrl ?? null;
 }
+
+/** URLs firmadas (1 h) para archivos que no son imágenes (clips de video, audio). */
+export async function signFiles(db: Db, bucket: Bucket, paths: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(paths.filter(Boolean))];
+  const result = new Map<string, string>();
+  for (let start = 0; start < unique.length; start += 300) {
+    const chunk = unique.slice(start, start + 300);
+    const { data } = await db.storage.from(bucket).createSignedUrls(chunk, SIGNED_URL_TTL_SEC);
+    chunk.forEach((path, i) => {
+      const url = data?.[i]?.signedUrl;
+      if (url) result.set(path, url);
+    });
+  }
+  return result;
+}

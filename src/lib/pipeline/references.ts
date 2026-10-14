@@ -1,12 +1,13 @@
 import sharp from "sharp";
 import type { Db } from "@/lib/jobs/types";
+import { locationLabel } from "@/lib/library/locations";
 import { downloadBuffer } from "@/lib/storage";
 
-export type ReferenceAsset = { assetId: string; storagePath: string; label: string };
+export type ReferenceAsset = { assetId: string; storagePath: string; label: string; kind: "character" | "location" | "ppe" };
 
 type AssetLite = { id: string; title: string; storage_path: string | null };
 type CharacterLite = { name: string; sheet_asset_ids: string[] };
-type LocationLite = { name: string; plate_asset_ids: string[] };
+type LocationLite = { code?: string | null; name: string; plate_asset_ids: string[] };
 
 const MAX_REFERENCES = 14;
 const MAX_CHARACTER_SHEETS = 6;
@@ -24,20 +25,20 @@ export function pickReferences(
   ppeSheets: AssetLite[],
 ): ReferenceAsset[] {
   const refs: ReferenceAsset[] = [];
-  const push = (asset: AssetLite | undefined, label: string) => {
+  const push = (asset: AssetLite | undefined, label: string, kind: ReferenceAsset["kind"]) => {
     if (asset?.storage_path && !refs.some((r) => r.assetId === asset.id)) {
-      refs.push({ assetId: asset.id, storagePath: asset.storage_path, label });
+      refs.push({ assetId: asset.id, storagePath: asset.storage_path, label, kind });
     }
   };
   for (const character of characters) {
     for (const id of character.sheet_asset_ids) {
       if (refs.length >= MAX_CHARACTER_SHEETS) break;
       const asset = assetsById.get(id);
-      push(asset, `character sheet of ${character.name}${asset ? ` (${asset.title})` : ""}`);
+      push(asset, `character sheet of ${character.name}${asset ? ` (${asset.title})` : ""}`, "character");
     }
   }
-  for (const id of location?.plate_asset_ids ?? []) push(assetsById.get(id), `location plate of ${location?.name}`);
-  for (const sheet of ppeSheets) push(sheet, "PPE gear sheet");
+  for (const id of location?.plate_asset_ids ?? []) push(assetsById.get(id), `location plate of ${location ? locationLabel(location) : ""}`, "location");
+  for (const sheet of ppeSheets) push(sheet, "PPE gear sheet", "ppe");
   return refs.slice(0, MAX_REFERENCES);
 }
 

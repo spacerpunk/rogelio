@@ -99,7 +99,8 @@ export async function updateShotPrompt(
 async function frameWithShot(db: Db, frameId: string) {
   const { data, error } = await db
     .from("frames")
-    .select("id, shot_id, shots(project_id, status)")
+    // Con el FK explícito: shots también apunta a frames (video_prompt_frame_id) y el embed sería ambiguo.
+    .select("id, shot_id, shots!frames_shot_id_fkey(project_id, status)")
     .eq("id", uuid.parse(frameId))
     .single();
   if (error || !data?.shots) throw new Error("No encontré el frame.");
@@ -120,7 +121,7 @@ export async function selectFrame(frameId: string): Promise<ActionResult> {
       .eq("project_id", projectId)
       .is("deleted_at", null)
       .neq("status", "frame_selected");
-    if (count === 0) await advanceProjectStatus(db, projectId, "done");
+    if (count === 0) await advanceProjectStatus(db, projectId, "clips");
     revalidate(projectId);
     return null;
   });
@@ -132,7 +133,7 @@ export async function unselectFrame(frameId: string): Promise<ActionResult> {
     const { frame, projectId } = await frameWithShot(db, frameId);
     throwIfError(await db.from("frames").update({ selected: false }).eq("id", frame.id), "No se pudo quitar");
     throwIfError(await db.from("shots").update({ status: "approved" }).eq("id", frame.shot_id), "No se pudo actualizar el plano");
-    await db.from("projects").update({ status: "frames" }).eq("id", projectId).eq("status", "done");
+    await db.from("projects").update({ status: "frames" }).eq("id", projectId).in("status", ["clips", "done"]);
     revalidate(projectId);
     return null;
   });
@@ -143,7 +144,7 @@ export async function rejectFrame(frameId: string, rejected: boolean): Promise<A
     const db = await createClient();
     const { frame, projectId } = await frameWithShot(db, frameId);
     const { data: current } = await db.from("frames").select("selected").eq("id", frame.id).single();
-    if (rejected && current?.selected) throw new Error("Es el frame elegido: quitalo de elegido antes de rechazarlo.");
+    if (rejected && current?.selected) throw new Error("Es el frame aprobado: quitale la aprobación antes de rechazarlo.");
     throwIfError(await db.from("frames").update({ rejected }).eq("id", frame.id), "No se pudo actualizar");
     revalidate(projectId);
     return null;

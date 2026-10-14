@@ -4,8 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { runAction, throwIfError, type ActionResult } from "@/lib/action-result";
-import { assertEngineReady, assertImageModelReady, defaultImageEngineName } from "@/lib/engines/registry";
-import { IMAGE_SIZES } from "@/lib/engines/types";
+import {
+  assertEngineReady,
+  assertImageModelReady,
+  assertVideoModelReady,
+  defaultImageEngineName,
+  defaultVideoEngineName,
+} from "@/lib/engines/registry";
+import { IMAGE_SIZES, VIDEO_RESOLUTIONS } from "@/lib/engines/types";
 import { normalizedMime, sourceKind, unsupportedSourceMessage } from "@/lib/ingest/kinds";
 import { enqueueJob } from "@/lib/jobs/queue";
 import { ASPECT_RATIOS } from "@/lib/projects/data";
@@ -95,8 +101,9 @@ export async function updateProject(input: {
 }
 
 /**
- * Motores y ajustes de imagen del proyecto: motor de texto (PDFs, guion, shot list, prompts), motor y modelo
- * de imagen, resolución y formato de los frames. Cambiar el motor de imagen sin modelo vuelve a su default.
+ * Motores y ajustes del proyecto: motor de texto (PDFs, guion, shot list, prompts), motor y modelo de imagen,
+ * resolución y formato de los frames, y motor, modelo, resolución y modo logo de los clips de video.
+ * Cambiar un motor sin modelo vuelve a su default.
  */
 export async function setProjectEngines(input: {
   projectId: string;
@@ -105,6 +112,10 @@ export async function setProjectEngines(input: {
   imageModel?: string;
   imageSize?: string;
   aspectRatio?: string;
+  videoEngine?: string;
+  videoModel?: string;
+  videoResolution?: string;
+  videoLogo?: boolean;
 }): Promise<ActionResult> {
   return runAction(async () => {
     const data = z
@@ -115,10 +126,15 @@ export async function setProjectEngines(input: {
         imageModel: z.string().optional(),
         imageSize: z.enum(IMAGE_SIZES).optional(),
         aspectRatio: z.enum(ASPECT_RATIOS).optional(),
+        videoEngine: z.string().optional(),
+        videoModel: z.string().optional(),
+        videoResolution: z.enum(VIDEO_RESOLUTIONS).optional(),
+        videoLogo: z.boolean().optional(),
       })
       .parse(input);
     if (data.textEngine) assertEngineReady("text", data.textEngine);
     if (data.imageEngine) assertEngineReady("image", data.imageEngine);
+    if (data.videoEngine) assertEngineReady("video", data.videoEngine);
     const db = await createClient();
     // El modelo se guarda siempre junto con su motor, para que no quede asociado a otro si cambia el default.
     let modelEngine: string | null = null;
@@ -126,6 +142,12 @@ export async function setProjectEngines(input: {
       const { data: project } = await db.from("projects").select("image_engine").eq("id", data.projectId).single();
       modelEngine = data.imageEngine ?? project?.image_engine ?? defaultImageEngineName();
       assertImageModelReady(modelEngine, data.imageModel);
+    }
+    let videoModelEngine: string | null = null;
+    if (data.videoModel) {
+      const { data: project } = await db.from("projects").select("video_engine").eq("id", data.projectId).single();
+      videoModelEngine = data.videoEngine ?? project?.video_engine ?? defaultVideoEngineName();
+      assertVideoModelReady(videoModelEngine, data.videoModel);
     }
     throwIfError(
       await db
@@ -136,6 +158,10 @@ export async function setProjectEngines(input: {
           ...(data.imageModel ? { image_engine: modelEngine, image_model: data.imageModel } : {}),
           ...(data.imageSize ? { image_size: data.imageSize } : {}),
           ...(data.aspectRatio ? { aspect_ratio: data.aspectRatio } : {}),
+          ...(data.videoEngine ? { video_engine: data.videoEngine, video_model: null } : {}),
+          ...(data.videoModel ? { video_engine: videoModelEngine, video_model: data.videoModel } : {}),
+          ...(data.videoResolution ? { video_resolution: data.videoResolution } : {}),
+          ...(data.videoLogo !== undefined ? { video_logo: data.videoLogo } : {}),
         })
         .eq("id", data.projectId),
       "No se pudo cambiar el ajuste",

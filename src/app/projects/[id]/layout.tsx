@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { defaultImageEngineName, defaultTextEngineName, listImageEngines, listTextEngines } from "@/lib/engines/registry";
+import {
+  defaultImageEngineName,
+  defaultTextEngineName,
+  defaultVideoEngineName,
+  listImageEngines,
+  listTextEngines,
+  listVideoEngines,
+} from "@/lib/engines/registry";
 import { loadProjectSummary } from "@/lib/projects/data";
 import { createClient } from "@/lib/supabase/server";
 import { CostPopover } from "./cost-popover";
@@ -19,6 +26,8 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
   const textEngines = listTextEngines();
   const imageEngines = listImageEngines();
   const imageEngine = project.image_engine ?? defaultImageEngineName();
+  const videoEngines = listVideoEngines();
+  const videoEngine = project.video_engine ?? defaultVideoEngineName();
 
   return (
     <ProjectJobsProvider projectId={project.id} initialJobs={summary.jobs}>
@@ -42,12 +51,17 @@ export default async function ProjectLayout({ children, params }: LayoutProps<"/
               projectId={project.id}
               textEngines={textEngines}
               imageEngines={imageEngines}
+              videoEngines={videoEngines}
               settings={{
                 text: project.text_engine ?? defaultTextEngineName(),
                 image: imageEngine,
                 imageModel: project.image_model ?? imageEngines.find((e) => e.name === imageEngine)?.model ?? "",
                 imageSize: project.image_size,
                 aspectRatio: project.aspect_ratio,
+                video: videoEngine,
+                videoModel: project.video_model ?? videoEngines.find((e) => e.name === videoEngine)?.model ?? "",
+                videoResolution: project.video_resolution,
+                videoLogo: project.video_logo,
               }}
             />
             <CostPopover total={costUsd} lines={summary.costBreakdown} />

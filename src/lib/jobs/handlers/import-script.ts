@@ -2,22 +2,13 @@ import { z } from "zod";
 import { getTextEngine } from "@/lib/engines/registry";
 import { extractDocx } from "@/lib/ingest/docx";
 import { scriptFileKind } from "@/lib/ingest/kinds";
+import { SCRIPT_PDF_INSTRUCTIONS, SCRIPT_PDF_SYSTEM } from "@/lib/ingest/pdf-prompts";
 import { advanceProjectStatus, insertScriptVersion } from "@/lib/pipeline/context";
 import { downloadBuffer } from "@/lib/storage";
 import type { JobHandler } from "../types";
 
 // El límite de la API es 32 MB por request; en base64 el PDF crece ~33 %.
 const MAX_PDF_BYTES = 24 * 1024 * 1024;
-
-const PDF_SYSTEM =
-  "Transcribís guiones de videos de capacitación. La transcripción se usa tal cual como guion del video, así que tiene que ser textual y completa.";
-
-const PDF_INSTRUCTIONS = `Transcribí este guion completo en Markdown, en el orden original.
-
-- Copiá el texto palabra por palabra: locuciones, diálogos, indicaciones visuales, títulos de escena, tiempos y notas. No resumas, no corrijas ni reescribas.
-- Conservá la estructura: escenas o secuencias como encabezados, y los guiones a dos columnas (video / audio) como tablas Markdown.
-- Ignorá encabezados y pies de página repetidos, números de página y logos.
-- Devolvé solo el guion, sin comentarios antes ni después.`;
 
 const payloadSchema = z.object({ path: z.string().min(1), fileName: z.string().min(1), mimeType: z.string() });
 
@@ -42,10 +33,10 @@ export const importScript: JobHandler = async (ctx) => {
     await ctx.progress(0, 1, `${engine.label} está leyendo el guion`);
     const result = await ctx.track(engine, "import_script_pdf", () =>
       engine.complete({
-        system: PDF_SYSTEM,
+        system: SCRIPT_PDF_SYSTEM,
         content: [
           { type: "pdf", data: file },
-          { type: "text", text: PDF_INSTRUCTIONS },
+          { type: "text", text: SCRIPT_PDF_INSTRUCTIONS },
         ],
         maxTokens: 64_000,
         effort: "medium",

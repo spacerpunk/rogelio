@@ -338,7 +338,7 @@ function ShotRow({
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              {shot.status === "draft" ? "Sin aprobar" : shot.status === "approved" ? "Aprobado" : "Frame elegido"}
+              {shot.status === "draft" ? "Sin aprobar" : shot.status === "approved" ? "Aprobado" : "Frame aprobado"}
             </TooltipContent>
           </Tooltip>
         </div>

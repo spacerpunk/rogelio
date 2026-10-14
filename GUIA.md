@@ -91,14 +91,16 @@ Van en `.env.local` (nunca en el código ni en el repo):
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | Clave de Anthropic (Claude) | La tuya |
 | `ANTHROPIC_MODEL` | Modelo de texto de Claude | `claude-opus-5-5` |
-| `GEMINI_API_KEY` | Clave de Google (Gemini, para texto e imagen) | La tuya |
+| `GEMINI_API_KEY` | Clave de Google (Gemini, para texto, imagen y video) | La tuya |
 | `GEMINI_TEXT_MODEL` | Modelo de texto de Gemini | `gemini-3.8-flash` (estable) o `gemini-3.1-pro-preview` |
 | `GEMINI_IMAGE_MODEL` | Modelos de imagen de Gemini que se pueden elegir (el primero es el default) | `gemini-3.1-flash-image,gemini-3-pro-image` (Nano Banana 2 y Nano Banana Pro) |
+| `GEMINI_VIDEO_MODEL` | Modelo de video de Gemini (clips desde el frame aprobado) | `gemini-omni-1.1-flash` (Gemini Omni Flash) |
 | `OPENAI_API_KEY` | Clave de OpenAI (GPT, para texto e imagen) | La tuya |
 | `OPENAI_TEXT_MODEL` | Modelo de texto de OpenAI | `gpt-6.1-sol` (o `gpt-6-astra`, el más capaz) |
 | `OPENAI_IMAGE_MODEL` | Modelo de imagen de OpenAI | `gpt-image-2.5-sunburst` (más preciso con referencias) o `gpt-image-2.5-flare` (más rápido) |
 | `DEFAULT_TEXT_ENGINE` | Motor de texto de los proyectos que no eligieron uno | `claude`, `openai` o `gemini` |
 | `DEFAULT_IMAGE_ENGINE` | Motor de imagen de los proyectos que no eligieron uno | `gemini` u `openai` |
+| `DEFAULT_VIDEO_ENGINE` | Motor de video de los proyectos que no eligieron uno | `gemini` |
 | `WORKER_CONCURRENCY` | Cuántos trabajos corre el worker en paralelo | `3` |
 
 Hace falta **un motor de texto** (Claude, GPT o Gemini: lee los PDFs y escribe guion, shot list y
@@ -113,6 +115,11 @@ En la misma ventana, la sección **Imagen** define cómo se generan los frames d
 (entre los de la lista de `.env.local`; por defecto Nano Banana 2), **resolución** (1K, 2K o 4K; por
 defecto 2K, solo Gemini) y **formato** (por defecto 16:9). Con Nano Banana 2 cada imagen cuesta unos
 US$ 0,067 a 1K, US$ 0,10 a 2K y US$ 0,15 a 4K. Los cambios aplican a los frames que se generen después.
+
+La sección **Video** define los clips: **motor** (por ahora Gemini Omni), **modelo**, **resolución** (720p
+por defecto; 1080p y 4k son reescalados) y si **el uniforme lleva el logo** del cliente (el "modo logo" del
+system prompt de video). Con Gemini Omni a 720p cada segundo de video cuesta unos US$ 0,10 (un clip de 6 s,
+unos US$ 0,63). Omni solo genera 16:9 o 9:16.
 
 ### Modo de prueba (sin claves)
 
@@ -158,13 +165,28 @@ negativo estándar.
 - si está **basado en una persona real** y si el **consentimiento** está confirmado. Sin consentimiento
   confirmado, no se generan frames con ese personaje.
 
-**Locaciones.** Nombre, descripción visual en inglés y sus **location plates** (fotos o renders del lugar
-sin gente).
+**Locaciones.** Cada locación es una **plate** con código (P1, P2, … P11), nombre, descripción visual en
+inglés y una o más **location plates** (renders del lugar sin gente). Si una locación tiene variantes (de
+día y de noche, otro ángulo: P2a y P2b, P10A, P10B y P10C), van todas como plates de la misma locación y se
+adjuntan juntas. El guion cita cada locación con código y nombre ("P7 · Campamento"), y el shot list la
+asigna por ese código. `npm run seed` carga las plates de Clear (P1 a P11) desde `seed/clear/Locaciones/`.
 
 **Referencias.** Todas las imágenes del cliente:
 - las **hojas de EPP activas** se adjuntan a todos los frames;
 - el logo queda guardado como referencia pero no se adjunta solo;
 - las sheets y plates se asignan desde las pestañas de Personajes y Locaciones.
+
+### Settings: qué system prompt usa cada paso
+
+**Settings** (arriba, en la barra) muestra, por cliente, qué textos recibe el motor en cada paso del
+pipeline y en qué orden: lectura de PDF, guion, guion subido, shot list, prompts de imagen y prompts de
+video. Cada pieza dice de dónde sale:
+- **Biblioteca del cliente** (style bible, master prompt de guion, system prompt de imagen, de video,
+  negativo): se edita ahí mismo y cada cambio es una versión nueva. Se puede volver a una versión vieja con
+  "Usar esta versión".
+- **Interno de la app**: textos fijos que definen el formato que la app necesita leer (por ejemplo, el
+  contrato de escenas y tomas del guion). Se ven, pero se cambian en el código.
+- **Lo arma la app**: los datos del proyecto que se suman en cada llamada (fuentes, plano, frame…).
 
 ### Paso 1: crear el proyecto
 
@@ -257,15 +279,15 @@ muestra:
 
 Botones:
 - **Generar prompt / Regenerar prompt**: el motor de texto escribe el prompt de imagen y el negativo con el system
-  prompt de imagen del cliente. También escribe un borrador de prompt de video para la fase 2.
+  prompt de imagen del cliente.
 - **Generar N variantes**: genera frames de ese plano. Si no tenía prompt, primero lo escribe.
 - **Prompts faltantes**: prompts en lote para los planos que no tienen o que quedaron desactualizados.
-- **Lote: planos sin frame elegido**: frames en lote para todo el proyecto, con progreso visible. Los
+- **Lote: planos sin frame aprobado**: frames en lote para todo el proyecto, con progreso visible. Los
   frames van apareciendo a medida que se generan.
 
-Sobre cada frame (al pasar el mouse):
-- ✓ **Elegir**: queda como el frame de ese plano. Cuando todos los planos tienen frame elegido, el
-  proyecto pasa a "Terminado".
+Debajo de cada frame:
+- ✓ **Aprobar**: queda como el frame aprobado de ese plano (uno por plano) y es el **primer cuadro del
+  video**. Cuando todos los planos tienen frame aprobado, el proyecto pasa a "Video".
 - ✕ **Rechazar**: se oculta; lo ves con "Mostrar rechazados".
 - 💬 **Nota de revisión**: por ejemplo "HSE: falta el detector de gases".
 - Click en la imagen: la abre en tamaño completo.
@@ -276,6 +298,33 @@ Avisos que pueden aparecer:
 - **"Prompt anterior"** sobre un frame: se generó con un prompt distinto al actual.
 - **"Último intento falló: …"**: el motivo concreto (rate limit, contenido bloqueado, consentimiento
   faltante, clave mal configurada).
+
+### Paso 6: video
+
+Cada plano con frame aprobado se anima desde ese frame. Arriba elegís el **motor** (Gemini Omni) y cuántos
+**clips** por plano (1 a 4); la barra de abajo muestra qué system prompt de video está en uso (link a
+Settings). Cada plano muestra:
+- el frame aprobado, la acción y la locución;
+- el **prompt de video**, la línea **Avoid** y los **segundos a generar**, editables;
+- **Revisión del frame y notas**: lo que el motor de texto vio mal en el frame antes de animar (un parche
+  mal escrito, una pantalla con texto legible, EPP puesto adentro…), con la sugerencia (inpaint,
+  regenerar o aceptar), y el plano, la continuidad y notas;
+- la grilla de clips, con reproductor.
+
+Botones:
+- **Generar prompt / Regenerar prompt**: el motor de texto mira el frame aprobado y escribe el prompt con
+  el system prompt de video del cliente (reparto, módulo de marca, reglas de la casa).
+- **Generar N clips · S s**: genera clips de ese plano. Si no tenía prompt, o se escribió para otro frame,
+  primero lo escribe.
+- **Prompts faltantes** y **Lote: planos sin clip aprobado**: en lote para todo el proyecto, con el costo
+  estimado antes de confirmar. Cada clip tarda entre medio minuto y un par de minutos.
+
+Debajo de cada clip: ✓ **Aprobar** (uno por plano; con todos los planos con clip aprobado, el proyecto
+pasa a "Terminado"), ✕ **Rechazar** y 💬 **Nota de revisión**.
+
+Avisos: **"El prompt se escribió para otro frame"** (cambiaste el frame aprobado), **"Otro frame"** sobre
+un clip (salió de un frame que ya no es el aprobado), y que un personaje **basado en una persona real**
+puede hacer que Gemini Omni bloquee el clip.
 
 ---
 
@@ -337,21 +386,27 @@ Todos manejan igual los errores:
   - el **descriptor visual de cada personaje**, textual, y la descripción de la locación;
   - la iluminación y el texto en pantalla;
   - qué referencias se van a adjuntar y el negativo estándar del cliente.
-
-  Con el mismo esquema, el *video system prompt* genera el borrador de video.
+- **Prompt de video (por plano):** system prompt = el *video system prompt* del cliente. El mensaje lleva
+  la **imagen del frame aprobado** (para revisarla), el motor y modelo de video, formato, resolución, modo
+  logo, la acción, la locución, la duración útil, los personajes con sus notas y la locación. La respuesta
+  es JSON: prompt, Avoid, segundos a generar y correcciones del frame.
 - **Frame:** el prompt y el negativo del plano, más las imágenes de referencia, achicadas a 1536 px:
   - sheets de los personajes del plano (hasta 6);
   - plates de la locación;
   - hojas de EPP activas;
   - hasta 14 en total.
+- **Clip:** el frame aprobado como primer cuadro, las sheets de los personajes del plano (hasta 3) como
+  referencia de identidad, y el prompt con el Avoid al final (Gemini Omni no tiene campo negativo). La
+  duración la guía la línea de tiempo del prompt; la real se lee del archivo.
 
 ### Aprobaciones y estados
 
 | Qué | Estados | Qué lo cambia |
 | --- | --- | --- |
-| Proyecto | Fuentes → Guion → Shot list → Frames → Terminado | Avanza solo: primer guion generado, guion aprobado, shot list aprobado, todos los planos con frame elegido |
+| Proyecto | Fuentes → Guion → Shot list → Frames → Video → Terminado | Avanza solo: primer guion generado, guion aprobado, shot list aprobado, todos los planos con frame aprobado, todos con clip aprobado |
 | Guion | borrador / aprobado | "Aprobar guion" (una sola versión aprobada) |
-| Plano | sin aprobar / aprobado / frame elegido | "Aprobar shot list", editar el plano (vuelve a sin aprobar), elegir un frame |
+| Plano | sin aprobar / aprobado / frame aprobado | "Aprobar shot list", editar el plano (vuelve a sin aprobar), aprobar un frame |
+| Clip | aprobado / rechazado | "Aprobar" en el clip (uno por plano) |
 
 ### Nada se borra
 
@@ -422,9 +477,8 @@ La especificación completa del producto está en [CLAUDE.md](CLAUDE.md) y el re
 
 ### Lo que viene (fases 2 y 3)
 
-La base ya tiene las tablas `voiceovers`, `clips` y `timelines`, y cada plano guarda un borrador de
-prompt de video. Falta:
+La base ya tiene las tablas `voiceovers` y `timelines`, y los clips se generan con Gemini Omni. Falta:
 - voz en off con ElevenLabs;
-- clips de video (Veo, Seedance) a partir del frame elegido;
+- más motores de video (Seedance 2.5, Veo) detrás del mismo adaptador;
 - el timeline;
 - la exportación a Premiere o DaVinci.

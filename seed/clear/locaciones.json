@@ -1,18 +1,83 @@
-[
-  {
-    "name": "Patio de ripio y flota",
-    "description": "YARD with FLEET: bright white-grey gravel (ripio) surface, Patagonian steppe behind, distant flat mesetas, barbed-wire fence with weathered white wooden posts, deep blue sky. White heavy trucks, tank trucks with cylindrical white aluminum tanks, and a white utility truck with red and navy swoosh stripes; door decal with the Clear logo and a fleet number; amber roof beacons; red-diamond flammable-liquid placard with a UN number on tankers. No third-party brand names or logos; trucks stay generic."
-  },
-  {
-    "name": "Locación de pozo",
-    "description": "WELL SITE: wellhead with red valves and gauges, pumpjack with counterweights, white modular trailers, bright white-grey gravel, Patagonian steppe and flat mesetas behind, deep blue sky."
-  },
-  {
-    "name": "Plataforma de workover",
-    "description": "WORKOVER PLATFORM: yellow-and-blue steel workover platform with yellow handrails and hanging chains over a wellhead with red valves, bright white-grey gravel around it, pumpjack in the distance, Patagonian steppe and deep blue sky."
-  },
-  {
-    "name": "Oficina contenedor",
-    "description": "OFFICE CONTAINER: modular prefab container office, cream and light-grey panels, exposed conduit, fluorescent tube, whiteboard with process diagrams, radios in charging cradles, binders on steel shelves, a window with the steppe and pumpjacks, jacket with reflective tape on a hook."
-  }
-]
+{
+  "locations": [
+    {
+      "code": "P1",
+      "name": "Locación de pozo (aérea)",
+      "description": "WELL SITE, aerial view at dawn: a drilling rig mast and a pumpjack next to a wellhead with red valves on a pale white-grey gravel pad, a curving gravel access road, a row of white modular trailers, barbed-wire fence with weathered wooden posts, dry Patagonian steppe with low shrubs, flat mesetas on the horizon, soft pink-and-blue dawn sky.",
+      "plates": [{ "file": "P1.jpg", "title": "P1 · Locación de pozo (aérea, amanecer)" }]
+    },
+    {
+      "code": "P2",
+      "name": "Escalera de la plataforma de workover",
+      "description": "WORKOVER PLATFORM STAIRS: steep yellow steel staircase with yellow handrails rising to a blue-and-yellow workover platform over a wellhead with red valves and blue machinery, stacked steel tubing on wooden sleepers beside it, bright white-grey gravel, a pumpjack in the distance, dry Patagonian steppe. Two lighting versions: midday under a deep blue sky, and golden-hour sunset with warm backlight.",
+      "plates": [
+        { "file": "P2a.jpg", "title": "P2a · Escalera del workover (mediodía)" },
+        { "file": "P2b.jpg", "title": "P2b · Escalera del workover (atardecer)" }
+      ]
+    },
+    {
+      "code": "P3",
+      "name": "Piso de la plataforma de workover",
+      "description": "WORKOVER PLATFORM DECK, high angle from the top of the stairs: steel grating deck with yellow handrails and a stair opening, a wellhead with red valves and pressure gauges, worn blue-painted drawworks machinery, the Patagonian steppe and flat mesetas below with distant pumpjacks, warm low sun.",
+      "plates": [{ "file": "P3.jpg", "title": "P3 · Piso del workover" }]
+    },
+    {
+      "code": "P4",
+      "name": "Vestuario",
+      "description": "LOCKER ROOM inside a prefab module: tall grey steel lockers with louvered doors (one open), a long wooden bench, white hard hats hanging on wall hooks, light wood-grain laminate walls, a fluorescent tube light, a small window with daylight, a wall-mounted first-aid box, dark ribbed rubber floor.",
+      "plates": [{ "file": "P4.jpg", "title": "P4 · Vestuario" }]
+    },
+    {
+      "code": "P5",
+      "name": "Rincón de seguridad (oficina contenedor)",
+      "description": "SAFETY CORNER inside a container office: light wood-grain laminate walls, a red first-aid cabinet and a green emergency sign, a white hard hat and red leather gloves on wall hooks, hand-sanitizer dispensers, a red fire extinguisher on the wall, two grey steel lockers, a small table with a mate gourd and papers, blue chairs, a whiteboard, a window with daylight onto the gravel yard and white trailers.",
+      "plates": [{ "file": "P5.jpg", "title": "P5 · Rincón de seguridad" }]
+    },
+    {
+      "code": "P6",
+      "name": "Pasillo del módulo",
+      "description": "MODULE CORRIDOR: long narrow corridor with pale grey and wood-grain laminate wall panels, a row of blank dark flat screens mounted on the wall, fluorescent ceiling lights, glossy light floor, an open door at the far end with bright daylight.",
+      "plates": [{ "file": "P6.jpg", "title": "P6 · Pasillo del módulo" }]
+    },
+    {
+      "code": "P7",
+      "name": "Campamento (aérea)",
+      "description": "CAMP, aerial view: rows of white modular trailers along a gravel road, a large white prefab building, small storage containers and piled pipes, dry Patagonian steppe, flat mesetas on the horizon with a drilling rig and pumpjacks in the distance, partly cloudy sky, soft daylight.",
+      "plates": [{ "file": "P7.jpg", "title": "P7 · Campamento (aérea)" }]
+    },
+    {
+      "code": "P8",
+      "name": "Módulo exterior",
+      "description": "MODULE EXTERIOR: a single white trailer module with dark green trim, small windows and two doors with metal steps, a wooden bench, a red wheeled fire extinguisher and a green hose by the wall, white-grey gravel ground, a wire fence, Patagonian steppe at golden hour with long shadows.",
+      "plates": [{ "file": "P8.jpg", "title": "P8 · Módulo exterior" }]
+    },
+    {
+      "code": "P9",
+      "name": "Cabina de descanso",
+      "description": "REST CABIN: small bedroom inside a module, a single bed with a grey wool blanket and a white pillow, a wooden nightstand with a small lamp, a navy work coverall and a white hard hat hanging on wall hooks, work boots on the floor, a small grey steel locker, wood-grain laminate walls, a window with a dark roller blind, warm low lamp light.",
+      "plates": [{ "file": "P9.jpg", "title": "P9 · Cabina de descanso" }]
+    },
+    {
+      "code": "P10",
+      "name": "Comedor del campamento",
+      "description": "CAMP CANTEEN: long wooden tables with rows of blue and red plastic chairs, light wood-grain laminate walls, fluorescent tube lights, a whiteboard, wide windows onto the gravel yard and white trailers, a stainless-steel serving counter and kitchen at the back, a red fire extinguisher. Versions: angled daytime view, centered daytime view, and centered night view with dark windows.",
+      "plates": [
+        { "file": "P10A.jpg", "title": "P10A · Comedor (día, en ángulo)" },
+        { "file": "P10B.jpg", "title": "P10B · Comedor (día, centrado)" },
+        { "file": "P10C.jpg", "title": "P10C · Comedor (noche)" }
+      ]
+    },
+    {
+      "code": "P11",
+      "name": "Mesa del comedor (cenital)",
+      "description": "CANTEEN TABLE, top-down overhead view: long wooden tables set with white plates, cutlery and glasses, blue and red plastic chairs on both sides, grey concrete floor.",
+      "plates": [{ "file": "P11.jpg", "title": "P11 · Mesa del comedor (cenital)" }]
+    },
+    {
+      "name": "Patio de ripio y flota",
+      "description": "YARD with FLEET: bright white-grey gravel (ripio) surface, Patagonian steppe behind, distant flat mesetas, barbed-wire fence with weathered white wooden posts, deep blue sky. White heavy trucks, tank trucks with cylindrical white aluminum tanks, and a white utility truck with red and navy swoosh stripes; door decal with the Clear logo and a fleet number; amber roof beacons; red-diamond flammable-liquid placard with a UN number on tankers. No third-party brand names or logos; trucks stay generic.",
+      "plates": []
+    }
+  ],
+  "archive": ["Locación de pozo", "Plataforma de workover", "Oficina contenedor"]
+}

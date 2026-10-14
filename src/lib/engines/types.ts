@@ -63,6 +63,35 @@ export interface ImageEngine {
   generate(opts: ImageRequest): Promise<EngineResultMeta & { images: Buffer[] }>;
 }
 
+/** Resolución de salida de video (Gemini Omni: 1080p y 4k son reescalados). */
+export const VIDEO_RESOLUTIONS = ["360p", "720p", "1080p", "4k"] as const;
+export type VideoResolution = (typeof VIDEO_RESOLUTIONS)[number];
+
+export type VideoRequest = {
+  prompt: string;
+  /** Línea Avoid. Los motores sin campo negativo la reciben al final del prompt. */
+  negative?: string;
+  /** Primer frame del clip: el frame aprobado del plano. */
+  firstFrame: Buffer;
+  /** Referencias de identidad (character sheets), después del primer frame. */
+  references: Buffer[];
+  aspectRatio: AspectRatio;
+  resolution: VideoResolution;
+  /** Segundos pedidos: el motor puede no respetarlos exactos; la duración real se lee del archivo. */
+  durationSec: number;
+};
+
+export interface VideoEngine {
+  readonly name: string;
+  readonly label: string;
+  readonly model: string;
+  /** Formatos que admite (Gemini Omni: solo 16:9 y 9:16). */
+  readonly aspectRatios: readonly AspectRatio[];
+  /** Duración máxima de un clip en segundos. */
+  readonly maxDurationSec: number;
+  generate(opts: VideoRequest): Promise<EngineResultMeta & { video: Buffer; mimeType: string; durationSec: number | null }>;
+}
+
 export type EngineErrorKind = "config" | "rate_limit" | "content_blocked" | "bad_request" | "unavailable" | "invalid_output" | "unknown";
 
 /**
