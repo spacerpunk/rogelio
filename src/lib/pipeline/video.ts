@@ -9,13 +9,11 @@ import type { Database } from "@/lib/supabase/database.types";
 import { activeTextContent } from "./context";
 import { assertConsent, loadShotContext, type ShotContext } from "./frames";
 import { SHOT_LIBRARY } from "./prompts";
-import { loadReferenceBuffers } from "./references";
+import { loadReferenceBuffers, referencesKey, referencesUsed, resolveShotReferences, type ReferenceAsset } from "./references";
 import { FRAMING_LABEL } from "./shotlist";
 
 type FrameRow = Database["public"]["Tables"]["frames"]["Row"];
 
-/** Hojas de personaje que acompañan al primer frame como referencia de identidad. */
-const VIDEO_MAX_CHARACTER_SHEETS = 3;
 /** Mínimo de segundos a generar: lo esencial tiene que pasar dentro del tramo útil (system prompt de video). */
 const VIDEO_MIN_SEC = 4;
 const FRAME_MAX_SIDE = 1536;
@@ -36,18 +34,16 @@ export const videoPromptSchema = z.object({
 });
 export type VideoPromptOutput = z.infer<typeof videoPromptSchema>;
 
-export type VideoShotContext = ShotContext & { frame: FrameRow | null };
+/** videoReferences: lo que acompaña al primer frame (sheets automáticas y extras del plano). */
+export type VideoShotContext = ShotContext & { frame: FrameRow | null; videoReferences: ReferenceAsset[] };
 
 export async function loadVideoShotContext(db: Db, shotId: string): Promise<VideoShotContext> {
   const ctx = await loadShotContext(db, shotId);
-  const { data: frame } = await db
-    .from("frames")
-    .select("*")
-    .eq("shot_id", shotId)
-    .eq("selected", true)
-    .is("deleted_at", null)
-    .maybeSingle();
-  return { ...ctx, frame };
+  const [{ data: frame }, videoReferences] = await Promise.all([
+    db.from("frames").select("*").eq("shot_id", shotId).eq("selected", true).is("deleted_at", null).maybeSingle(),
+    resolveShotReferences(db, ctx.project.client_id, ctx.shot, ctx.characters, ctx.location, "video"),
+  ]);
+  return { ...ctx, frame, videoReferences };
 }
 
 /** Motor y modelo de video del proyecto. El modelo guardado solo vale para el motor al que pertenece. */
@@ -68,7 +64,7 @@ function shotId(ctx: ShotContext): string {
 /** Input para el motor de texto con el video system prompt del cliente como system. */
 export function buildVideoPromptInput(
   ctx: VideoShotContext,
-  opts: { engine: string; model: string | null; maxSec: number; referenceNames: string[] },
+  opts: { engine: string; model: string | null; maxSec: number; /** false: sin el formato de salida (la edición pide el suyo). */ outputSpec?: boolean },
 ): string {
   const { shot, project, characters, location } = ctx;
   const editSec = Math.round(Number(shot.est_duration_sec ?? 4));
@@ -93,9 +89,17 @@ export function buildVideoPromptInput(
     ctx.frame?.review_notes ? `Production review note on this frame: ${ctx.frame.review_notes}` : "",
     "",
     "Attached to this message: the approved first frame of this shot. Run the FRAME QA on it before writing the prompt.",
-    `The video model receives, in this order: Image 1 = the approved first frame${opts.referenceNames
-      .map((name, i) => `; Image ${i + 2} = character sheet of ${name}`)
+    `The video model receives, in this order: Image 1 = the approved first frame${ctx.videoReferences
+      .map((ref, i) => `; Image ${i + 2} = ${ref.label}`)
       .join("")}.`,
+    ...(opts.outputSpec === false ? [] : videoOutputSpec()),
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
+}
+
+function videoOutputSpec(): string[] {
+  return [
     "",
     "Instead of the Markdown OUTPUT FORMAT, return JSON with these fields:",
     '- frame_qa: the "Correcciones antes de animar" in Spanish, one line per real problem (with inpaint / regenerate / accept); empty string if the frame is fine.',
@@ -104,9 +108,7 @@ export function buildVideoPromptInput(
     '- avoid: the Avoid line (standard line + clip-specific additions), comma-separated, without the "Avoid:" prefix.',
     "- generate_seconds: seconds to generate (integer). trim_seconds: seconds to keep after trimming.",
     '- continuity: the "Continuidad" line in Spanish. notes: the "Nota" line in Spanish, or empty string.',
-  ]
-    .filter((l) => l !== "")
-    .join("\n");
+  ];
 }
 
 /** El primer frame achicado (máx. 1536 px) para que el motor de texto lo revise. */
@@ -117,14 +119,6 @@ async function frameForReview(frame: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
-function characterSheets(ctx: ShotContext) {
-  return ctx.references.filter((r) => r.kind === "character").slice(0, VIDEO_MAX_CHARACTER_SHEETS);
-}
-
-/** El nombre del personaje de cada sheet, en el orden en que se adjuntan. */
-function sheetNames(ctx: ShotContext): string[] {
-  return characterSheets(ctx).map((r) => r.label.replace(/^character sheet of /, "").replace(/ \(.*\)$/, ""));
-}
 
 /**
  * El motor de texto del proyecto escribe el prompt de video mirando el frame aprobado, con el video system prompt
@@ -153,7 +147,6 @@ export async function generateVideoPromptForShot(job: JobContext, ctx: VideoShot
               engine: engineName,
               model: videoSettings(ctx.project, engineName).model ?? engineInfo?.model ?? null,
               maxSec,
-              referenceNames: sheetNames(ctx),
             }),
           },
         ],
@@ -180,6 +173,7 @@ export async function generateVideoPromptForShot(job: JobContext, ctx: VideoShot
     video_duration_sec: seconds,
     video_qa_notes: qa || null,
     video_prompt_frame_id: ctx.frame.id,
+    video_prompt_references_key: referencesKey(ctx.videoReferences),
     video_prompt_generated_at: new Date().toISOString(),
   };
   const { error } = await db.from("shots").update(patch).eq("id", ctx.shot.id);
@@ -187,7 +181,7 @@ export async function generateVideoPromptForShot(job: JobContext, ctx: VideoShot
   Object.assign(ctx.shot, patch);
 }
 
-function getVideoEngineMaxSec(engineName: string): number {
+export function getVideoEngineMaxSec(engineName: string): number {
   // Sin instanciar el motor (no hace falta la clave para escribir el prompt): los límites conocidos por motor.
   return { gemini: 10 }[engineName] ?? 10;
 }
@@ -204,10 +198,9 @@ export async function generateClipsForShot(job: JobContext, ctx: VideoShotContex
 
   const settings = videoSettings(ctx.project, engineName);
   const engine = getVideoEngine(engineName, settings.savedModel);
-  const sheets = characterSheets(ctx);
   const [firstFrame, references] = await Promise.all([
     downloadBuffer(db, "projects", ctx.frame.storage_path),
-    loadReferenceBuffers(db, sheets),
+    loadReferenceBuffers(db, ctx.videoReferences),
   ]);
   const durationSec = Math.min(engine.maxDurationSec, Number(ctx.shot.video_duration_sec ?? ctx.shot.est_duration_sec ?? VIDEO_MIN_SEC));
   const request = {
@@ -254,6 +247,7 @@ export async function generateClipsForShot(job: JobContext, ctx: VideoShotContex
       negative_used: request.negative ?? null,
       resolution: request.resolution,
       aspect_ratio: request.aspectRatio,
+      references_used: referencesUsed(ctx.videoReferences),
       cost_usd: clip.costUsd,
       job_id: job.job.id,
     });

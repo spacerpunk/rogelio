@@ -4,6 +4,7 @@ import { roundUsd } from "@/lib/engines/pricing";
 import { EngineError } from "@/lib/engines/types";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { adaptScript } from "./handlers/adapt-script";
+import { editPromptJob } from "./handlers/edit-prompt";
 import { extractSource } from "./handlers/extract-source";
 import { generateClips } from "./handlers/generate-clips";
 import { generateScript } from "./handlers/generate-script";
@@ -24,6 +25,7 @@ const HANDLERS: Partial<Record<JobType, JobHandler>> = {
   generate_frames: generateFrames,
   generate_video_prompts: generateVideoPrompts,
   generate_clips: generateClips,
+  edit_prompt: editPromptJob,
 };
 
 const HEARTBEAT_MS = 15_000;

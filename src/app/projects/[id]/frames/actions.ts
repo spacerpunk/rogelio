@@ -151,6 +151,24 @@ export async function rejectFrame(frameId: string, rejected: boolean): Promise<A
   });
 }
 
+/** Rechaza todas las variantes sin aprobar del plano: queda marcado para regenerar. */
+export async function rejectUnapprovedFrames(shotId: string): Promise<ActionResult<number>> {
+  return runAction(async () => {
+    const db = await createClient();
+    const { data, error } = await db
+      .from("frames")
+      .update({ rejected: true })
+      .eq("shot_id", uuid.parse(shotId))
+      .eq("selected", false)
+      .eq("rejected", false)
+      .is("deleted_at", null)
+      .select("shots!frames_shot_id_fkey(project_id)");
+    throwIfError({ error }, "No se pudieron rechazar");
+    if (data?.[0]?.shots) revalidate(data[0].shots.project_id);
+    return data?.length ?? 0;
+  });
+}
+
 export async function setReviewNotes(frameId: string, notes: string): Promise<ActionResult> {
   return runAction(async () => {
     const db = await createClient();

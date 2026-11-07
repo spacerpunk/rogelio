@@ -131,6 +131,7 @@ export type Database = {
           model: string | null
           negative_used: string | null
           prompt_used: string | null
+          references_used: Json | null
           rejected: boolean
           resolution: string | null
           review_notes: string | null
@@ -153,6 +154,7 @@ export type Database = {
           model?: string | null
           negative_used?: string | null
           prompt_used?: string | null
+          references_used?: Json | null
           rejected?: boolean
           resolution?: string | null
           review_notes?: string | null
@@ -175,6 +177,7 @@ export type Database = {
           model?: string | null
           negative_used?: string | null
           prompt_used?: string | null
+          references_used?: Json | null
           rejected?: boolean
           resolution?: string | null
           review_notes?: string | null
@@ -296,6 +299,7 @@ export type Database = {
           negative_used: string | null
           prompt_used: string
           reference_asset_ids: string[]
+          references_used: Json | null
           rejected: boolean
           review_notes: string | null
           selected: boolean
@@ -315,6 +319,7 @@ export type Database = {
           negative_used?: string | null
           prompt_used: string
           reference_asset_ids?: string[]
+          references_used?: Json | null
           rejected?: boolean
           review_notes?: string | null
           selected?: boolean
@@ -334,6 +339,7 @@ export type Database = {
           negative_used?: string | null
           prompt_used?: string
           reference_asset_ids?: string[]
+          references_used?: Json | null
           rejected?: boolean
           review_notes?: string | null
           selected?: boolean
@@ -669,6 +675,70 @@ export type Database = {
           },
         ]
       }
+      shot_references: {
+        Row: {
+          asset_id: string | null
+          created_at: string
+          deleted_at: string | null
+          frame_id: string | null
+          id: string
+          label: string
+          shot_id: string
+          source: string
+          storage_path: string | null
+          target: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          frame_id?: string | null
+          id?: string
+          label: string
+          shot_id: string
+          source: string
+          storage_path?: string | null
+          target: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          frame_id?: string | null
+          id?: string
+          label?: string
+          shot_id?: string
+          source?: string
+          storage_path?: string | null
+          target?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shot_references_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "library_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shot_references_frame_id_fkey"
+            columns: ["frame_id"]
+            isOneToOne: false
+            referencedRelation: "frames"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shot_references_shot_id_fkey"
+            columns: ["shot_id"]
+            isOneToOne: false
+            referencedRelation: "shots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shots: {
         Row: {
           action: string | null
@@ -676,10 +746,13 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           est_duration_sec: number | null
+          excluded_image_reference_ids: string[]
+          excluded_video_reference_ids: string[]
           framing: Database["public"]["Enums"]["shot_framing"]
           id: string
           image_negative: string | null
           image_prompt: string | null
+          image_prompt_references_key: string | null
           lighting: string | null
           location_id: string | null
           notes: string | null
@@ -698,6 +771,7 @@ export type Database = {
           video_prompt: string | null
           video_prompt_frame_id: string | null
           video_prompt_generated_at: string | null
+          video_prompt_references_key: string | null
           video_qa_notes: string | null
           vo_line: string | null
         }
@@ -707,10 +781,13 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           est_duration_sec?: number | null
+          excluded_image_reference_ids?: string[]
+          excluded_video_reference_ids?: string[]
           framing?: Database["public"]["Enums"]["shot_framing"]
           id?: string
           image_negative?: string | null
           image_prompt?: string | null
+          image_prompt_references_key?: string | null
           lighting?: string | null
           location_id?: string | null
           notes?: string | null
@@ -729,6 +806,7 @@ export type Database = {
           video_prompt?: string | null
           video_prompt_frame_id?: string | null
           video_prompt_generated_at?: string | null
+          video_prompt_references_key?: string | null
           video_qa_notes?: string | null
           vo_line?: string | null
         }
@@ -738,10 +816,13 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           est_duration_sec?: number | null
+          excluded_image_reference_ids?: string[]
+          excluded_video_reference_ids?: string[]
           framing?: Database["public"]["Enums"]["shot_framing"]
           id?: string
           image_negative?: string | null
           image_prompt?: string | null
+          image_prompt_references_key?: string | null
           lighting?: string | null
           location_id?: string | null
           notes?: string | null
@@ -760,6 +841,7 @@ export type Database = {
           video_prompt?: string | null
           video_prompt_frame_id?: string | null
           video_prompt_generated_at?: string | null
+          video_prompt_references_key?: string | null
           video_qa_notes?: string | null
           vo_line?: string | null
         }
@@ -1038,6 +1120,7 @@ export type Database = {
         | "adapt_script"
         | "generate_video_prompts"
         | "generate_clips"
+        | "edit_prompt"
       project_status:
         | "draft"
         | "script"
@@ -1201,6 +1284,7 @@ export const Constants = {
         "adapt_script",
         "generate_video_prompts",
         "generate_clips",
+        "edit_prompt",
       ],
       project_status: [
         "draft",

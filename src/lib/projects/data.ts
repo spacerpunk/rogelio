@@ -18,10 +18,10 @@ export const ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3"] as const;
 
 export type ProjectJob = Pick<
   JobRow,
-  "id" | "type" | "status" | "progress" | "error" | "shot_id" | "payload" | "created_at" | "finished_at" | "cost_usd"
+  "id" | "type" | "status" | "progress" | "error" | "shot_id" | "payload" | "result" | "created_at" | "finished_at" | "cost_usd"
 >;
 
-export const JOB_COLUMNS = "id, type, status, progress, error, shot_id, payload, created_at, finished_at, cost_usd";
+export const JOB_COLUMNS = "id, type, status, progress, error, shot_id, payload, result, created_at, finished_at, cost_usd";
 
 export type StepState = { done: boolean; label: string };
 

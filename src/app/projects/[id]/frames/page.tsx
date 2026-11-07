@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { modelName } from "@/lib/engines/model-names";
 import { defaultImageEngineName, listImageEngines } from "@/lib/engines/registry";
 import { shotPromptHash } from "@/lib/pipeline/prompts";
-import { pickReferences } from "@/lib/pipeline/references";
+import { autoReferences } from "@/lib/pipeline/references";
 import { locationLabel } from "@/lib/library/locations";
+import { referencePickerOptions, shotReferenceViews } from "@/lib/projects/review";
 import { signImages } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 import { FramesStep, type FrameView, type ShotFramesView } from "./frames-step";
@@ -48,22 +49,24 @@ export default async function FramesPage({ params }: PageProps<"/projects/[id]/f
   const ppeSheets = (assets.data ?? []).filter((a) => a.kind === "ppe_sheet" && a.is_active);
   const charactersById = new Map((characters.data ?? []).map((c) => [c.id, c]));
   const locationsById = new Map((locations.data ?? []).map((l) => [l.id, l]));
+  const charactersOf = (ids: string[]) => ids.flatMap((cid) => (charactersById.has(cid) ? [charactersById.get(cid)!] : []));
 
-  const refsByShot = new Map(
+  const autoByShot = new Map(
     shots.data.map((s) => {
-      const shotCharacters = s.character_ids.flatMap((cid) => (charactersById.has(cid) ? [charactersById.get(cid)!] : []));
       const location = s.location_id ? (locationsById.get(s.location_id) ?? null) : null;
-      return [s.id, pickReferences(shotCharacters, location, assetsById, ppeSheets)];
+      return [s.id, autoReferences("image", charactersOf(s.character_ids), location, assetsById, ppeSheets)];
     }),
   );
 
-  const [signedFrames, signedRefs] = await Promise.all([
+  const [signedFrames, references, picker] = await Promise.all([
     signImages(db, "projects", (frames ?? []).map((f) => f.storage_path)),
-    signImages(db, "library", [...refsByShot.values()].flat().map((r) => r.storagePath)),
+    shotReferenceViews(db, "image", shots.data, autoByShot),
+    referencePickerOptions(db, clientId, shots.data.map((s, i) => ({ id: s.id, number: i + 1 }))),
   ]);
 
   const views: ShotFramesView[] = shots.data.map((s, i) => {
-    const shotCharacters = s.character_ids.flatMap((cid) => (charactersById.has(cid) ? [charactersById.get(cid)!] : []));
+    const shotCharacters = charactersOf(s.character_ids);
+    const refs = references.get(s.id) ?? { active: [], removed: [], key: "" };
     return {
       id: s.id,
       number: i + 1,
@@ -79,10 +82,8 @@ export default async function FramesPage({ params }: PageProps<"/projects/[id]/f
       imagePrompt: s.image_prompt,
       imageNegative: s.image_negative,
       promptStale: Boolean(s.image_prompt && s.prompt_inputs_hash && s.prompt_inputs_hash !== shotPromptHash(s)),
-      references: (refsByShot.get(s.id) ?? []).flatMap((r) => {
-        const img = signedRefs.get(r.storagePath);
-        return img ? [{ label: r.label, thumbUrl: img.thumbUrl }] : [];
-      }),
+      referencesChanged: Boolean(s.image_prompt && s.image_prompt_references_key !== null && s.image_prompt_references_key !== refs.key),
+      references: refs,
       frames: (frames ?? [])
         .filter((f) => f.shot_id === s.id)
         .flatMap((f): FrameView[] => {
@@ -119,6 +120,8 @@ export default async function FramesPage({ params }: PageProps<"/projects/[id]/f
       shots={views}
       engines={engines}
       engine={imageEngine}
+      libraryImages={picker.libraryImages}
+      frameOptions={picker.frameOptions}
       imageSummary={[
         imageModel ? modelName(imageModel) : "sin modelo",
         ...(imageEngine === "gemini" ? [project!.image_size] : []),

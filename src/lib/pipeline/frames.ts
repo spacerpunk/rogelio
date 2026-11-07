@@ -6,7 +6,7 @@ import { ensureThumbnail } from "@/lib/storage";
 import type { Database } from "@/lib/supabase/database.types";
 import { activeTextContent } from "./context";
 import { buildImagePromptInput, imagePromptSchema, shotPromptHash, type PromptShotInput } from "./prompts";
-import { loadReferenceBuffers, resolveShotReferences, type ReferenceAsset } from "./references";
+import { loadReferenceBuffers, referencesKey, referencesUsed, resolveShotReferences, type ReferenceAsset } from "./references";
 
 type Tables = Database["public"]["Tables"];
 
@@ -34,7 +34,7 @@ export async function loadShotContext(db: Db, shotId: string): Promise<ShotConte
   ]);
   // Mismo orden que en el plano.
   const ordered = shot.character_ids.flatMap((id) => (characters.data ?? []).filter((c) => c.id === id));
-  const references = await resolveShotReferences(db, project.client_id, ordered, location.data ?? null);
+  const references = await resolveShotReferences(db, project.client_id, shot, ordered, location.data ?? null, "image");
   return { shot, project, characters: ordered, location: location.data ?? null, references };
 }
 
@@ -99,6 +99,7 @@ export async function generatePromptsForShot(job: JobContext, ctx: ShotContext, 
       image_prompt: image.data.final_prompt.trim(),
       image_negative: image.data.negative.trim() || clientNegative,
       prompt_inputs_hash: shotPromptHash(ctx.shot),
+      image_prompt_references_key: referencesKey(ctx.references),
       prompts_generated_at: new Date().toISOString(),
     })
     .eq("id", ctx.shot.id);
@@ -153,7 +154,8 @@ export async function generateFramesForShot(job: JobContext, ctx: ShotContext, e
       model: result.model,
       prompt_used: ctx.shot.image_prompt!,
       negative_used: ctx.shot.image_negative,
-      reference_asset_ids: ctx.references.map((r) => r.assetId),
+      reference_asset_ids: ctx.references.flatMap((r) => (r.assetId ? [r.assetId] : [])),
+      references_used: referencesUsed(ctx.references),
       cost_usd: Math.round(costEach * 10_000) / 10_000,
       job_id: job.job.id,
     });

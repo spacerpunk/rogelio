@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "studio-mock",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set ENGINE_MOCK=1&& npm run dev"],
+      "port": 3000
     }
   ]
 }

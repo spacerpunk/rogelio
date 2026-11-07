@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { defaultVideoEngineName, listVideoEngines } from "@/lib/engines/registry";
 import { locationLabel } from "@/lib/library/locations";
+import { autoReferences } from "@/lib/pipeline/references";
+import { referencePickerOptions, shotReferenceViews } from "@/lib/projects/review";
 import { signFiles, signImages } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 import { VideoStep, type ClipView, type ShotVideoView } from "./video-step";
@@ -17,10 +19,11 @@ export default async function VideoPage({ params }: PageProps<"/projects/[id]/vi
     .single();
   const clientId = project!.client_id;
 
-  const [shots, characters, locations, videoSystem] = await Promise.all([
+  const [shots, characters, locations, sheets, videoSystem] = await Promise.all([
     db.from("shots").select("*").eq("project_id", id).is("deleted_at", null).order("order_index"),
-    db.from("characters").select("id, name, based_on_real_person, consent_confirmed").eq("client_id", clientId).is("deleted_at", null),
+    db.from("characters").select("id, name, sheet_asset_ids, based_on_real_person, consent_confirmed").eq("client_id", clientId).is("deleted_at", null),
     db.from("locations").select("id, code, name").eq("client_id", clientId),
+    db.from("library_assets").select("id, title, storage_path").eq("client_id", clientId).eq("kind", "character_sheet").is("deleted_at", null),
     db
       .from("library_assets")
       .select("title, version")
@@ -45,6 +48,12 @@ export default async function VideoPage({ params }: PageProps<"/projects/[id]/vi
       ])
     : [{ data: [] }, { data: [] }];
 
+  const charactersById = new Map((characters.data ?? []).map((c) => [c.id, c]));
+  const locationsById = new Map((locations.data ?? []).map((l) => [l.id, l]));
+  const sheetsById = new Map((sheets.data ?? []).map((a) => [a.id, a]));
+  const charactersOf = (ids: string[]) => ids.flatMap((cid) => (charactersById.has(cid) ? [charactersById.get(cid)!] : []));
+  const autoByShot = new Map(shots.data.map((s) => [s.id, autoReferences("video", charactersOf(s.character_ids), null, sheetsById, [])]));
+
   const framesById = new Map((frames.data ?? []).map((f) => [f.id, f]));
   const approvedByShot = new Map((frames.data ?? []).filter((f) => f.selected).map((f) => [f.shot_id, f]));
   // Imágenes: el frame aprobado de cada plano y el frame del que salió cada clip (póster del video).
@@ -52,18 +61,18 @@ export default async function VideoPage({ params }: PageProps<"/projects/[id]/vi
     ...[...approvedByShot.values()].map((f) => f.storage_path),
     ...(clips.data ?? []).flatMap((c) => (c.frame_id && framesById.has(c.frame_id) ? [framesById.get(c.frame_id)!.storage_path] : [])),
   ];
-  const [signedFrames, signedClips] = await Promise.all([
+  const [signedFrames, signedClips, references, picker] = await Promise.all([
     signImages(db, "projects", framePaths),
     signFiles(db, "projects", (clips.data ?? []).flatMap((c) => (c.video_path ? [c.video_path] : []))),
+    shotReferenceViews(db, "video", shots.data, autoByShot),
+    referencePickerOptions(db, clientId, shots.data.map((s, i) => ({ id: s.id, number: i + 1 }))),
   ]);
 
-  const charactersById = new Map((characters.data ?? []).map((c) => [c.id, c]));
-  const locationsById = new Map((locations.data ?? []).map((l) => [l.id, l]));
-
   const views: ShotVideoView[] = shots.data.map((s, i) => {
-    const shotCharacters = s.character_ids.flatMap((cid) => (charactersById.has(cid) ? [charactersById.get(cid)!] : []));
+    const shotCharacters = charactersOf(s.character_ids);
     const frame = approvedByShot.get(s.id) ?? null;
     const frameImage = frame ? signedFrames.get(frame.storage_path) : undefined;
+    const refs = references.get(s.id) ?? { active: [], removed: [], key: "" };
     return {
       id: s.id,
       number: i + 1,
@@ -83,6 +92,8 @@ export default async function VideoPage({ params }: PageProps<"/projects/[id]/vi
       videoQaNotes: s.video_qa_notes,
       // El prompt se escribió mirando otro frame (o es un borrador viejo, sin frame): hay que regenerarlo.
       promptStale: Boolean(s.video_prompt && frame && s.video_prompt_frame_id !== frame.id),
+      referencesChanged: Boolean(s.video_prompt && s.video_prompt_references_key !== null && s.video_prompt_references_key !== refs.key),
+      references: refs,
       clips: (clips.data ?? [])
         .filter((c) => c.shot_id === s.id)
         .flatMap((c): ClipView[] => {
@@ -124,6 +135,8 @@ export default async function VideoPage({ params }: PageProps<"/projects/[id]/vi
       engine={videoEngine}
       videoSummary={[videoModel ?? "sin modelo", project!.video_resolution, project!.aspect_ratio].join(" · ")}
       systemPrompt={videoSystem.data ? `${videoSystem.data.title} · v${videoSystem.data.version}` : null}
+      libraryImages={picker.libraryImages}
+      frameOptions={picker.frameOptions}
     />
   );
 }
